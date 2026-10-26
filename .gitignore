@@ -1,0 +1,10 @@
+.DS_Store
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcresult
+# Private research inputs; never publish device captures or Android packages.
+*.cfa
+*.btsnoop
+*.apk

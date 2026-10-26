@@ -1,0 +1,153 @@
+{
+  "provenance": "Public synthetic values generated independently with OpenSSL; no device or capture material.",
+  "vectors": [
+    {
+      "name": "ordinary",
+      "local_private": "000000000000000000000000000000000000000007",
+      "peer_public": "919a63e6d6319896330549cce03869729c4e82827ef14d9ede750423d7ecd3bda6bdf008946efe31",
+      "shared_secret": "2719f7e2b867b7de06dba6bb2b90098805de45ff",
+      "valid_info": "cc1d7a65b3de2ee525ae8e7c8ccec387e8be39cdf3e92d791a623510b4030101",
+      "wrong_length_info": "cc1d7a65b3de2ee525ae8e7c8ccec38728d8cff86758403882bd28f01af2a693",
+      "invalid_padding_info": "d470b90eec928657b45ca8decd94022c0c180945fc27af6491ad4e9f5f78d0e6",
+      "invalid_seed_info": "cc1d7a65b3de2ee525ae8e7c8ccec387a1d3d7b2108286dc66e0036a5c804b20",
+      "session_key": "76bf8864ba87fbca9d7768a05865a984",
+      "status_request": "8a4c9fad4a5214b23f6bf66d2a138242408e4e882ed270bc5edea3b8e9b7ea0f",
+      "status_cases": [
+        {
+          "name": "matching",
+          "ciphertext": "631695ba15ebc505265890451de493d67640bf8807f49992779363db2a931d11",
+          "result": 1
+        },
+        {
+          "name": "wrong-source",
+          "ciphertext": "887eff2c811ca4890c1d64e78327c9a2f0361796edfcbbfd90f74ff20b6dcd49",
+          "result": 0
+        },
+        {
+          "name": "wrong-destination",
+          "ciphertext": "5c5fd53573968cb22bb34a133ec7046cc896c9f3466b26f1256500907cbe403e",
+          "result": 0
+        },
+        {
+          "name": "wrong-device-routing",
+          "ciphertext": "c3d1698a2ade5b8ec543a3e0b759e020ab9aa7d723800a88d35bfaf5013479ed",
+          "result": 0
+        },
+        {
+          "name": "login-not-status",
+          "ciphertext": "631695ba15ebc505265890451de493d6e76afe404ed2d0c7bd6724ae9e256672",
+          "result": 0
+        },
+        {
+          "name": "wrong-sequence",
+          "ciphertext": "6988089b1cc1afe1ded5733cec7bb714a583045eb5c498f7baa8569ef403a398",
+          "result": 0
+        },
+        {
+          "name": "bad-header-crc",
+          "ciphertext": "ba155b75c72f77b58c5939911ed8ac93812e05a333ff02d11caedd356481b427",
+          "result": -1
+        },
+        {
+          "name": "bad-packet-crc",
+          "ciphertext": "631695ba15ebc505265890451de493d67cd4fb460dd387c0b1cde8c442f6b72e",
+          "result": -1
+        },
+        {
+          "name": "bad-length",
+          "ciphertext": "e04b3ff5c71176249f773d79de22cefd0415e9348e200c737c077d3071e3cc26",
+          "result": -1
+        },
+        {
+          "name": "unsupported-version",
+          "ciphertext": "d99d93c4cd204737cf2f87736a63cc2268b2490d528129822c2944c236c48c2e",
+          "result": -1
+        },
+        {
+          "name": "bad-padding",
+          "ciphertext": "7ec83de8a55f2410c6939eceded655e17d983c31dd81c4c954b08f07ae294cc9",
+          "result": -1
+        },
+        {
+          "name": "too-short-inner",
+          "ciphertext": "4d4d4ea1341587d2fd235556885737e7",
+          "result": -1
+        }
+      ]
+    },
+    {
+      "name": "leading-zero",
+      "local_private": "000000000000000000000000000000000000000007",
+      "peer_public": "6313e09026987950a1678ea116c6ea3dc5e2402a0c94a2b8286d4c88cd6cddad9b3d76972dd918b8",
+      "shared_secret": "009d0792df1f62a0e8f6a359af9e74ac0397e0ca",
+      "valid_info": "b1370d1aaefbcb2f34ef38c87f029f285972da76271f76c19da7f7deb2128aac",
+      "wrong_length_info": "b1370d1aaefbcb2f34ef38c87f029f28c25f609aa857e5d1593c7d9cecfdc3aa",
+      "invalid_padding_info": "cd816abf1062c36e01021d84b8a2b560af81afbc28ae919d0c09976f90e57342",
+      "invalid_seed_info": "b1370d1aaefbcb2f34ef38c87f029f28c43424a3b17dab6b4442d039d1f3b4c6",
+      "session_key": "76bf8864ba87fbca9d7768a05865a984",
+      "status_request": "5959a46383a406f42c5729d2924660b0dba2fada3274c2410f5affabf7a7bd67",
+      "status_cases": [
+        {
+          "name": "matching",
+          "ciphertext": "c55ec1bd08d325d34232b92189a0b4829aaa470cdd946365e75f4c7d17576907",
+          "result": 1
+        },
+        {
+          "name": "wrong-source",
+          "ciphertext": "afc552a2b310b21f01d0742f19aa2105ef9396058c82c4698bd5c0cd3ae6cd9e",
+          "result": 0
+        },
+        {
+          "name": "wrong-destination",
+          "ciphertext": "81865d8160531c6aba58359c610ee852ed4cb7781bf5aeabda18c516dd58b1aa",
+          "result": 0
+        },
+        {
+          "name": "wrong-device-routing",
+          "ciphertext": "051460d845b282d13ba43cd0592ae7482213a56013fe31561ae3e4afbc72e311",
+          "result": 0
+        },
+        {
+          "name": "login-not-status",
+          "ciphertext": "c55ec1bd08d325d34232b92189a0b4826312eb1fb106d7d13a2cd4e63705cdb1",
+          "result": 0
+        },
+        {
+          "name": "wrong-sequence",
+          "ciphertext": "003f08d6800188f28f3476bc28e5429d84e5dd7d46c55c2632e7b0cbb3f4bee7",
+          "result": 0
+        },
+        {
+          "name": "bad-header-crc",
+          "ciphertext": "c02e28a39a7fd75d3e0bd8378f2c744500d9e6c1629927f1fcc35134174525d2",
+          "result": -1
+        },
+        {
+          "name": "bad-packet-crc",
+          "ciphertext": "c55ec1bd08d325d34232b92189a0b482ae0d6509b5ae2118473344605a9da1c9",
+          "result": -1
+        },
+        {
+          "name": "bad-length",
+          "ciphertext": "8d022338ea3380928a818d38106477458f560c8a08e6246395040d3a380df6a6",
+          "result": -1
+        },
+        {
+          "name": "unsupported-version",
+          "ciphertext": "7d8fceb5ec97ab8639f601f52b195e30362bacb0c94584a1a3419da9d62f492c",
+          "result": -1
+        },
+        {
+          "name": "bad-padding",
+          "ciphertext": "ed94a0084b248f4ab167b316be002bc5651fd85328cb877a8fd2d3ca81c73771",
+          "result": -1
+        },
+        {
+          "name": "too-short-inner",
+          "ciphertext": "cebfcc2fdc4eede7253f4f0f964d1619",
+          "result": -1
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "repository": "https://github.com/rabits/ha-ef-ble",
+  "commit": "817620c38d04b55ee4b5d094269dfe0080355b6d",
+  "source_path": "custom_components/ef_ble/eflib/keydata.py",
+  "source_git_blob": "5d8b510b73f96deaa3ace62fd8ef578c0242e4c6",
+  "transformation": "Base64 decode the published _data literal; bytes unchanged.",
+  "size": 65280,
+  "sha256": "3d1ba59b40c46bc86ba35fa231a3db196b448bbdfb1635c88ddd42f24abd4b2a",
+  "license": "Apache-2.0, repository license; no file-specific override or NOTICE present at pinned tree.",
+  "history": [
+    "e12089de239c6a2b827d61b703b158c7586b6758",
+    "51a26b291e7da29f3f72b93beb31b6109daac051"
+  ]
+}
