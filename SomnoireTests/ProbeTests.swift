@@ -8,6 +8,8 @@ private final class FakeCrypto: ProbeCryptography {
     var cleared = false
     var rejectInfo = false
     var derived = false
+    var packet = SessionPacketMetadata(source: 0x35, destination: 0x21, deviceSource: 1, deviceDestination: 1,
+        commandSet: 0x35, command: 0x89, sequence: 0, payloadLength: 1)
     func acceptPeer(_ point: Data) throws { accepted = true }
     func validateKeyInfo(_ ciphertext: Data) throws { if rejectInfo { throw ProbeFailure.invalidKeyInfo } }
     func deriveSession(_ ciphertext: Data) throws {
@@ -18,6 +20,12 @@ private final class FakeCrypto: ProbeCryptography {
         if ciphertext.first == 0xFF { throw ProbeFailure.invalidStatus }
         return ciphertext.first == 1
     }
+    func inspectPacket(_ ciphertext: Data) throws -> SessionPacketMetadata {
+        if ciphertext.first == 0xFF { throw ProbeFailure.invalidStatus }
+        return packet
+    }
+    func displayRequest() throws -> Data { throw ProbeFailure.sessionDerivation }
+    func accessReply(_ ciphertext: Data) throws -> AccessPacket { throw ProbeFailure.invalidStatus }
     func clear() { cleared = true }
 }
 
@@ -146,6 +154,64 @@ final class ProbeTests: XCTestCase {
     }
 
     @MainActor
+    private func reachObservation(_ probe: KeyExchangeProbe, lastWrite: () -> UUID) {
+        probe.start(); probe.gattReady(); probe.subscribed(success: true)
+        probe.writeCompleted(lastWrite(), success: true)
+        probe.receive(ProbeFrameCodec.encode(Data([1, 0, 0]) + Data(repeating: 1, count: 40)))
+        probe.writeCompleted(lastWrite(), success: true)
+        probe.receive(ProbeFrameCodec.encode(Data([2]) + Data(repeating: 0, count: 32)))
+        probe.receive(ProbeFrameCodec.encode(Data([1]), encrypted: true))
+        XCTAssertEqual(probe.stage, .status) // Early reply still needs the write acknowledgement.
+        probe.writeCompleted(lastWrite(), success: true)
+        XCTAssertEqual(probe.stage, .observing)
+    }
+
+    @MainActor
+    func testAccountFreeObservationIsBoundedPassiveAndDeduplicatesHeaders() {
+        var clock = 0.0; let crypto = FakeCrypto(); var writes: [(UUID, Data)] = []
+        var headers: [SessionPacketMetadata] = []
+        let probe = KeyExchangeProbe(kind: .telemetryAccess, now: { clock }, makeCrypto: { crypto })
+        probe.onAction = {
+            if case .write(let id, let bytes) = $0 { writes.append((id, bytes)) }
+            if case .observedPacket(let metadata) = $0 { headers.append(metadata) }
+        }
+        reachObservation(probe, lastWrite: { writes.last!.0 })
+        XCTAssertEqual(probe.deadline, 8)
+        crypto.packet = SessionPacketMetadata(source: 2, destination: 0x20, deviceSource: 1,
+            deviceDestination: 1, commandSet: 0xFE, command: 0x15, sequence: 0, payloadLength: 42)
+        clock = 4 // Observing has an eight-second window, not a three-second stage timeout.
+        let frame = ProbeFrameCodec.encode(Data([2]), encrypted: true)
+        for byte in frame { probe.receive(Data([byte])) }
+        probe.receive(frame)
+        XCTAssertNil(probe.result)
+        XCTAssertEqual(headers.count, 2) // Status plus one distinct notification header.
+        clock = 8; probe.expire()
+        XCTAssertEqual(probe.result?.outcome, .observationComplete)
+        XCTAssertEqual(probe.result?.observedPacketCount, 2)
+        XCTAssertEqual(writes.count, 3) // Public key, key-info, status. No login or telemetry guesses.
+        XCTAssertTrue(crypto.cleared)
+        probe.receive(frame); probe.writeCompleted(writes.last!.0, success: false)
+        XCTAssertEqual(probe.result?.outcome, .observationComplete)
+    }
+
+    @MainActor
+    func testAccountFreeObservationStopsOnCancellationDisconnectAndInvalidPackets() {
+        for reason in ["cancel", "disconnect", "invalid"] {
+            let crypto = FakeCrypto(); var writes: [(UUID, Data)] = []
+            let probe = KeyExchangeProbe(kind: .telemetryAccess, makeCrypto: { crypto })
+            probe.onAction = { if case .write(let id, let data) = $0 { writes.append((id, data)) } }
+            reachObservation(probe, lastWrite: { writes.last!.0 })
+            if reason == "cancel" { probe.cancel(); XCTAssertEqual(probe.result?.outcome, .cancelled) }
+            else if reason == "disconnect" { probe.fail(.disconnected); XCTAssertEqual(probe.result?.outcome, .failed(.disconnected)) }
+            else {
+                probe.receive(ProbeFrameCodec.encode(Data([0xFF]), encrypted: true))
+                XCTAssertEqual(probe.result?.outcome, .failed(.invalidStatus))
+            }
+            XCTAssertTrue(crypto.cleared); XCTAssertNil(probe.deadline); XCTAssertEqual(writes.count, 3)
+        }
+    }
+
+    @MainActor
     func testNativeCryptoFailsClosedForRejectedScalarEdgeCase() {
         // Pinned micro-ecc rejects scalar one in its co-Z multiplication path.
         // Production make_key retries rejected generated points; explicit failures
@@ -220,6 +286,17 @@ final class ProbeTests: XCTestCase {
             for item in vector.status_cases {
                 let ciphertext = bytes(item.ciphertext)
                 XCTAssertEqual(sn_probe_status_reply(context, ciphertext, ciphertext.count), item.result, item.name)
+                var metadata = SNSessionPacketMetadata()
+                metadata.payload_length = 123
+                let result = sn_probe_inspect_packet(context, ciphertext, ciphertext.count, &metadata)
+                XCTAssertEqual(result, item.result < 0 ? -1 : 1, item.name)
+                if result == 1 {
+                    XCTAssertEqual(metadata.payload_length, 1)
+                    if item.name == "matching" {
+                        XCTAssertEqual(metadata.source, 0x35); XCTAssertEqual(metadata.command, 0x89)
+                        XCTAssertEqual(metadata.sequence, 0)
+                    }
+                } else { XCTAssertEqual(metadata.payload_length, 0); XCTAssertEqual(metadata.source, 0) }
             }
             XCTAssertEqual(sn_probe_status_reply(context, request, 31), -1)
             XCTAssertEqual(sn_probe_status_reply(context, [UInt8](repeating: 0, count: 1024), 1024), -1)
@@ -322,6 +399,49 @@ final class ProbeTests: XCTestCase {
     }
 
     // Opt-in only: the dedicated hardware scheme enables this environment flag.
+    @MainActor
+    func testHardwareAccountFreeObservationTwice() async throws {
+        guard ProcessInfo.processInfo.environment["SOMNOIRE_HARDWARE_TELEMETRY_ACCESS"] == "1" else {
+            throw XCTSkip("Use the explicit Somnoire Telemetry Access Check scheme.")
+        }
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: "org.somnoire.telemetry-hardware"))
+        preferences.removePersistentDomain(forName: "org.somnoire.telemetry-hardware")
+        let manager = BluetoothManager(preferences: preferences)
+        defer {
+            print(manager.diagnosticReport()) // Typed metadata only; no identifiers or payloads.
+            manager.shutdown(); preferences.removePersistentDomain(forName: "org.somnoire.telemetry-hardware")
+        }
+        func wait(seconds: TimeInterval, until predicate: () -> Bool) async throws -> Bool {
+            let end = ProcessInfo.processInfo.systemUptime + seconds
+            while !predicate() && ProcessInfo.processInfo.systemUptime < end {
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            return predicate()
+        }
+        for attempt in 1...2 {
+            manager.startScan()
+            let found = try await wait(seconds: 15) {
+                manager.devices.contains { $0.advertisement.supportsKeyExchangeProbe && manager.canConnect($0) }
+            }
+            print("Discovery summary: devices=\(manager.devices.count), manufacturer-matched=\(manager.devices.filter { $0.advertisement.manufacturerID == 0xB5B5 }.count), profile-matched=\(manager.devices.filter { $0.advertisement.supportsKeyExchangeProbe }.count), scanning=\(manager.isScanning)")
+            XCTAssertTrue(found, "No eligible nearby bank; \(manager.availability.rawValue)")
+            guard found else { return }
+            let candidates = manager.devices.filter { $0.advertisement.supportsKeyExchangeProbe && manager.canConnect($0) }
+            guard candidates.count == 1 else { return XCTFail("Ambiguous hardware selection; no probe sent.") }
+            manager.connectAndProbe(to: candidates[0].id, kind: .telemetryAccess)
+            let finished = try await wait(seconds: 35) { manager.probeResult != nil }
+            XCTAssertTrue(finished)
+            let result = try XCTUnwrap(manager.probeResult)
+            print("Account-free attempt \(attempt): \(result.outcome.label); stage=\(result.stage.rawValue); other valid packets=\(result.observedPacketCount)")
+            // Disconnection during the observation window is an experimental finding,
+            // not proof of an account requirement. Failure before that window is fatal.
+            XCTAssertEqual(result.stage, .observing)
+            XCTAssertTrue(result.outcome == .observationComplete || result.outcome == .failed(.disconnected))
+            let idle = try await wait(seconds: 5) { manager.connection.isIdle }
+            XCTAssertTrue(idle, "Probe failed to release its connection")
+        }
+    }
+
     @MainActor
     func testHardwareKeyExchangeTwice() async throws {
         guard ProcessInfo.processInfo.environment["SOMNOIRE_HARDWARE_PROBES"] == "1" else {

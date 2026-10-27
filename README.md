@@ -2,15 +2,34 @@
 
 A small native **macOS 13+ menu-bar utility** for the EcoFlow RAPID Pro
 27,650mAh (300W), using Swift 6, SwiftUI and CoreBluetooth. Original source is
-MIT licensed. No account, analytics, cloud requests or runtime package installation.
+MIT licensed. No analytics, cloud requests or runtime package installation.
+Passive battery monitoring needs no account. An explicit authenticated diagnostic
+probe can use a one-time account ID locally; Somnoire never handles your password.
 
 Somnoire is named after the location in *Wuthering Waves*. This is an independent,
 experimental project focused on this power bank, not a general EcoFlow client.
 
-**0.5.0 continuously monitors the verified battery advertisement profile.**
+**Somnoire continuously monitors the verified battery advertisement profile.**
 The menu bar shows a fresh percentage beside Somnoire’s symbol. Automatic
 monitoring does not open a GATT connection, subscribe, authenticate or send commands.
-Settings, wattages, authenticated sessions and controls remain future work.
+Continuous wattage monitoring, persistent sessions, settings and controls remain future work.
+Version **0.5.2** added an explicit account-free access experiment: it classifies
+the status reply and requests one display report. Two current-bank attempts
+received no telemetry; see [Phase 2D](docs/Phase2D.md).
+Version **0.5.3** adds **Authenticated telemetry check**, which checks an existing
+credential before requesting the same display report. This remains an experiment,
+not continuous wattage monitoring; see [Phase 2E](docs/Phase2E.md).
+A user-assisted run verified existing-credential acceptance on the current bank.
+The following packet identified V19 framing. Version **0.5.5** corrects the
+length and encoding rules using the installed official app’s native parser.
+A 0.5.5 bank session validated repeated V19 display uploads. Version **0.5.6**
+adds their observed route to the authenticated decoder. Its first complete bank
+session accepted the credential, decoded 87 telemetry bodies with 29 port-power
+updates, then disconnected and resumed passive scanning. Repeated fresh sessions
+confirm decoding under load and unloaded. Field 852 reported −22.9 W on C1
+(labelled 140W in/out); unloaded port values were absent. Other port mappings
+and comparison against the bank’s screen remain pending. Version **0.5.7**
+distinguishes decoded telemetry with absent port readings from telemetry silence.
 
 ## Use
 
@@ -72,6 +91,8 @@ serials, battery readings, absolute timestamps, raw advertisements, packet bodie
 credentials and cryptographic keys. **Clear** clears events and volatile previews.
 
 Only the monitoring preference and selected CoreBluetooth UUID are saved locally.
+The experimental account-ID field and derived credential are volatile. No password
+entry, cloud sign-in code, credential persistence or credential-changing API exists.
 Raw details and payload previews are local, volatile inspection tools; review them
 before sharing manually. Probe traffic has no raw preview. There are no diagnostic
 files or application telemetry services.
@@ -80,8 +101,27 @@ files or application telemetry services.
 
 **Connect & Probe → Key exchange only** performs a fresh ECDH/key-info exchange,
 validates it and intentionally disconnects. **Session + status** additionally
-verifies an encrypted status reply, then disconnects. Both are explicit experiments;
-neither performs login, telemetry queries, controls or persistent monitoring.
+verifies an encrypted status reply, then disconnects. The third choice,
+**Account-free telemetry check**, uses the same session/status
+requests, then observes validated notification headers for up to eight seconds.
+It disconnects afterward and does not claim that port power is accessible.
+**Account-free access check** additionally interprets typed status and, for a
+supported normal-mode reply, requests one full display report using a fixed
+app-derived action. It observes for up to 30 seconds, then disconnects. No login,
+credential provisioning, unbinding, reset, port/charging settings, or report-period
+changes are sent. These four probes are account-free and explicit; there is no reconnect loop. See
+[Phase 2D](docs/Phase2D.md) for request provenance and the remaining access gate.
+
+The dedicated **Authenticated telemetry check** button on each eligible bank's
+Diagnostics row requires a numeric authorizing account ID in
+the secure Diagnostics field. Obtain it once through an official EcoFlow login
+using the same account/region as the bank. This probe accepts only normal mode
+with an existing credential, sends one `35/86` check, then requests a display
+report only after a validated successful reply. There are no credential retries,
+pairing changes or resets. The ID clears on probe start/window close, and C wipes
+the derived token; SwiftUI text buffers cannot guarantee memory zeroization.
+Experimental results show historical protocol-field measurements, with physical
+mapping explicitly unverified. **Clear** removes retained results while idle.
 
 The project vendors a small BSD-2-Clause micro-ecc curve library and a pinned
 Apache-2.0 protocol lookup table. Their provenance and licenses are retained under
@@ -113,24 +153,30 @@ See [current Phase 2B behavior and validation](docs/Phase2B.md). Historical evid
 [Phase 2A battery mapping](docs/Phase2A.md), [Phase 1B encrypted status](docs/Phase1B.md),
 [Phase 1A key exchange](docs/Phase1A.md), and [reference/license research](docs/BLE-Research.md).
 
-The current local validation passed **51 hardware-free tests**, a **45-second
-continuous-monitoring check**, and explicit GATT-close/monitoring-resumption checks.
+The current hardware-free suite passed **79 tests**, with six opt-in hardware
+checks skipped. The preceding Phase 2B validation passed a **45-second
+continuous-monitoring check** and explicit GATT-close/monitoring-resumption checks.
 Debug and Release compile for both architectures. Intel/macOS 13 runtime, live
 visual inspection, physical out-of-range recovery, and actual sleep/wake remain
 manual checks; compilation is not a substitute for those checks.
 
 Hardware checks are separately opt-in schemes: **Somnoire Continuous Monitoring
 Check**, **Somnoire Diagnostic Lifecycle Check**, **Somnoire Advertisement Battery
-Check**, **Somnoire Hardware Probe**, and **Somnoire Session Status Probe**. Ordinary
-tests never activate these checks or auto-restore saved monitoring.
+Check**, **Somnoire Hardware Probe**, **Somnoire Session Status Probe**,
+**Somnoire Telemetry Access Check**, and **Somnoire Account-Free Access Check**.
+Ordinary tests never activate these checks or auto-restore saved monitoring.
+
+The official app now provides an [app-derived P512 telemetry schema](docs/P512-Protocol.md)
+and an isolated Swift decoder with synthetic tests. The fixed report-request
+experiment did not establish account-free access on the current bank. Physical mapping and never-linked onboarding remain unverified;
+production wattage rows are still gated.
 
 ## Roadmap and license
 
 Next milestones are evidence-based wattage/telemetry decoding, verified device
-settings and controls, and an optional standalone monitoring window. Authentication
-and account requirements remain separate research; a successful encrypted status
-probe does not establish authenticated access. No speculative control commands are
-implemented.
+settings and controls, and an optional standalone monitoring window. The explicit
+existing-credential probe is research; a successful encrypted status probe alone
+does not establish authenticated access. No speculative control commands are implemented.
 
 Somnoire's original code is [MIT licensed](LICENSE). See
 [ThirdPartyNotices.txt](ThirdPartyNotices.txt) for the separately licensed vendored

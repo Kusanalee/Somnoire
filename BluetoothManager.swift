@@ -53,6 +53,7 @@ final class BluetoothManager: NSObject, ObservableObject {
     private var probeWrite: CBCharacteristic?
     private var probeNotify: CBCharacteristic?
     private var pendingProbeWriteID: UUID?
+    private var pendingCredential: ProbeCredential?
     private var central: CBCentralManager?
     private var peripherals: [UUID: CBPeripheral] = [:]
     private var current: CBPeripheral?
@@ -230,10 +231,27 @@ final class BluetoothManager: NSObject, ObservableObject {
         availability == .ready && connection.isIdle && device.advertisement.isConnectable != false
     }
 
-    func connectAndProbe(to id: UUID, kind: ProbeKind = .keyExchange) {
-        guard connection.isIdle else { return }
+    @discardableResult
+    func connectAndProbe(to id: UUID, kind: ProbeKind = .keyExchange, userID: String? = nil) -> Bool {
+        diagnostics.record(.probeRequested, peripheral: id, fields: [.probeKind(kind)])
+        guard connection.isIdle, let device = devices.first(where: { $0.id == id }),
+              canConnect(device), device.advertisement.supportsKeyExchangeProbe,
+              peripherals[id] != nil else {
+            notice = "Probe not started. Wait for disconnection, then discover and choose an eligible power bank."
+            return false
+        }
+        if kind == .authenticatedAccess {
+            guard let userID, let bytes = device.advertisement.manufacturerData,
+                  let credential = ProbeCredential(userID: userID, serial: bytes.subdata(in: 3..<19)) else {
+                notice = ProbeFailure.invalidCredential.rawValue
+                return false
+            }
+            pendingCredential = credential
+        }
         requestedProbeKind = kind
         connect(to: id, probe: true)
+        if connection.isIdle { pendingCredential?.clear(); pendingCredential = nil; return false }
+        return true
     }
 
     func connect(to id: UUID, probe requested: Bool = false) {
@@ -300,6 +318,7 @@ final class BluetoothManager: NSObject, ObservableObject {
     }
 
     func clearDiagnostics() {
+        if !isProbing { probeResult = nil }
         diagnostics.clear()
         batteryOutcomes.clear()
         for s in services.indices {
@@ -372,6 +391,7 @@ final class BluetoothManager: NSObject, ObservableObject {
     }
 
     private func resetConnection() {
+        pendingCredential?.clear(); pendingCredential = nil
         connectionTimer?.cancel()
         connectionTimer = nil
         current?.delegate = nil
@@ -409,7 +429,8 @@ final class BluetoothManager: NSObject, ObservableObject {
     }
 
     private func startProbe() {
-        let session = KeyExchangeProbe(kind: requestedProbeKind)
+        let session = KeyExchangeProbe(kind: requestedProbeKind, credential: pendingCredential)
+        pendingCredential = nil
         probe = session
         session.onChange = { [weak self, weak session] in
             guard let self, let session, self.probe === session else { return }
@@ -465,6 +486,14 @@ final class BluetoothManager: NSObject, ObservableObject {
             peripheral.writeValue(data, for: write, type: .withResponse)
         case .unrelatedStatus(let length):
             diagnostics.record(.unrelatedStatus, peripheral: connection.identifier, fields: [.count(.bytes, length)])
+        case .observedPacket(let packet):
+            diagnostics.record(.sessionPacket, peripheral: connection.identifier, fields: [.sessionPacket(packet)])
+        case .authenticationStatus(let summary):
+            diagnostics.record(.authenticationStatus, peripheral: connection.identifier, fields: [.authenticationStatus(summary)])
+        case .decodedTelemetry:
+            diagnostics.record(.candidateTelemetry, peripheral: connection.identifier)
+        case .packetValidation(let summary):
+            diagnostics.record(.packetValidation, peripheral: connection.identifier, fields: [.packetValidation(summary)])
         case .finished(let result): completeProbe(result)
         }
     }
@@ -476,7 +505,16 @@ final class BluetoothManager: NSObject, ObservableObject {
         notice = nil // The retained result has its own explicitly historical UI.
         diagnostics.record(.probeFinished, severity: {
             if case .failed = result.outcome { return .warning }; return .info
-        }(), peripheral: connection.identifier, fields: [.probeStage(result.stage), .probeOutcome(result.outcome), .count(.milliseconds, Int(result.elapsed * 1000))])
+        }(), peripheral: connection.identifier, fields: [.probeStage(result.stage), .probeOutcome(result.outcome),
+            .count(.milliseconds, Int(result.elapsed * 1000)), .count(.observedPackets, result.observedPacketCount)])
+        if let access = result.access {
+            diagnostics.record(.authenticationStatus, fields: [.authenticationStatus(access.authentication),
+                .count(.telemetryPackets, access.decodedPackets), .count(.portPowerUpdates, access.portPowerUpdates)])
+            if let accepted = access.credentialAccepted {
+                diagnostics.record(.authenticationStatus, fields: [.credentialAccepted(accepted)])
+            }
+        }
+        pendingCredential?.clear(); pendingCredential = nil
         probeTimer?.cancel(); probeTimer = nil
         probe = nil; probeRequested = false
         probeWrite = nil; probeNotify = nil; pendingProbeWriteID = nil

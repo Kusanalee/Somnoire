@@ -46,6 +46,10 @@ struct SomnoireMenuView: View {
 
 struct SomnoireDiagnosticsView: View {
     @ObservedObject var bluetooth: BluetoothManager
+    @State private var accountID = ""
+    private var validAccountID: Bool {
+        !accountID.isEmpty && accountID.utf8.count <= 32 && accountID.utf8.allSatisfy { (48...57).contains($0) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -85,6 +89,21 @@ struct SomnoireDiagnosticsView: View {
                     Text("Accepted monitoring advertisements: \(bluetooth.monitoring.receipts)")
                         .font(.caption).foregroundStyle(.secondary)
                     connectionSection
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Authenticated telemetry experiment").font(.caption.weight(.semibold))
+                        SecureField("Numeric EcoFlow authorizing account ID", text: $accountID)
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(bluetooth.isProbing)
+                            .accessibilityIdentifier("experimentalAccountID")
+                        Text(validAccountID ? "ID ready for a local credential check." :
+                            accountID.isEmpty ? "Paste the numeric account ID above." : "ID not ready: use 1–32 digits, with no spaces or other text.")
+                            .font(.caption2)
+                            .foregroundStyle(validAccountID ? Color.primary : Color.secondary)
+                        Text("Used once for a local credential check. Cleared when a probe starts or this window closes. Enter the account ID, never your password.")
+                            .font(.caption2).foregroundStyle(.secondary)
+                        Link("Account ID setup guide", destination: URL(string: "https://github.com/rabits/ha-ef-ble/wiki#finding-user-id-manually")!)
+                            .font(.caption2)
+                    }
                     if let stage = bluetooth.probeStage {
                         Text("Experimental probe · \(stage.rawValue)").font(.caption)
                         Button("Cancel Probe") { bluetooth.disconnect() }
@@ -93,6 +112,24 @@ struct SomnoireDiagnosticsView: View {
                         Text("Previous probe · \(result.kind.rawValue)").font(.caption.weight(.semibold))
                         Text(result.outcome.label).font(.caption)
                         Text(String(format: "Last probe: %.2f seconds", result.elapsed)).font(.caption2).foregroundStyle(.secondary)
+                        if result.kind == .telemetryAccess {
+                            Text("Other validated packets observed: \(result.observedPacketCount). Packet headers alone do not verify port power.")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                        if let access = result.access {
+                            Text(access.authentication.label).font(.caption2).foregroundStyle(.secondary)
+                            Text("One-shot report requested: \(access.reportRequestIssued ? "yes" : "no") · reply received: \(access.reportReplyReceived ? "yes" : "no")")
+                                .font(.caption2).foregroundStyle(.secondary)
+                            Text("Decoded packets: \(access.decodedPackets) · candidate port-power updates: \(access.portPowerUpdates)")
+                                .font(.caption2).foregroundStyle(.secondary)
+                            if result.kind == .authenticatedAccess {
+                                Text("Credential check: \(access.credentialCheckIssued ? (access.credentialAccepted.map { $0 ? "accepted" : "rejected" } ?? "no validated result") : "not sent")")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                                if let delta = access.latestDelta {
+                                    experimentalMeasurements(delta)
+                                }
+                            }
+                        }
                     }
                     Divider()
                     Text("Nearby devices (\(bluetooth.visibleDevices.count))").font(.subheadline.weight(.semibold))
@@ -128,6 +165,28 @@ struct SomnoireDiagnosticsView: View {
         }
         .padding(14)
         .frame(minWidth: 560, idealWidth: 640, maxWidth: .infinity, minHeight: 440, idealHeight: 600, maxHeight: .infinity)
+        .onDisappear { accountID = "" }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { _ in accountID = "" }
+    }
+
+    private func experimentalMeasurements(_ delta: P512TelemetryDelta) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Last reported experimental values · not live").font(.caption.weight(.semibold))
+            Text("Protocol fields; physical labels unverified. Values can come from different packets in this experiment.")
+                .font(.caption2).foregroundStyle(.secondary)
+            ForEach(P512ProtocolPort.allCases, id: \.self) { port in
+                if let reading = delta.ports[port] {
+                    Text("Field \(port.rawValue): \(experimentalValue(reading.watts, unit: "W")) · \(experimentalValue(reading.volts, unit: "V")) · \(experimentalValue(reading.amps, unit: "A"))")
+                        .font(.caption.monospacedDigit())
+                }
+            }
+            Text("App-derived convention: +W input, −W output; physical verification required.")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    private func experimentalValue(_ value: Float?, unit: String) -> String {
+        value.map { String(format: "%.1f %@", $0, unit) } ?? "— \(unit)"
     }
 
     private var connectionSection: some View {
@@ -166,17 +225,29 @@ struct SomnoireDiagnosticsView: View {
                         .disabled(!bluetooth.canConnect(device))
                     if device.advertisement.supportsKeyExchangeProbe {
                         Menu("Connect & Probe") {
-                            ForEach(ProbeKind.allCases, id: \.self) { kind in
-                                Button(kind.rawValue) { bluetooth.connectAndProbe(to: device.id, kind: kind) }
+                            ForEach(ProbeKind.allCases.filter { $0 != .authenticatedAccess }, id: \.self) { kind in
+                                Button(kind.rawValue) {
+                                    if bluetooth.connectAndProbe(to: device.id, kind: kind) {
+                                        accountID = ""
+                                    }
+                                }
                             }
                         }
                             .disabled(!bluetooth.canConnect(device))
-                            .help("Choose key exchange only or experimental encrypted session/status. Both intentionally disconnect. No login or device controls.")
+                            .help("Bounded session and telemetry experiments. The authenticated check uses the entered ID locally. Each probe disconnects; credentials and settings are never changed.")
+                        Button("Authenticated telemetry check") {
+                            if bluetooth.connectAndProbe(to: device.id, kind: .authenticatedAccess, userID: accountID) {
+                                accountID = ""
+                            }
+                        }
+                        .disabled(!bluetooth.canConnect(device))
+                        .help("Use the ID field above to check the existing credential and request one display report.")
                     }
                 }
             }
             if device.advertisement.supportsKeyExchangeProbe {
-                Text("Probe: experimental session exchange, then disconnect. No device controls.").font(.caption2).foregroundStyle(.secondary)
+                Text("Connect inspects GATT only. Authenticated telemetry check runs the credential experiment and disconnects.")
+                    .font(.caption2).foregroundStyle(.secondary)
             }
             if !device.hints.isEmpty {
                 if let reading = device.visibleBatteryReading() {
@@ -262,7 +333,7 @@ struct SomnoireDiagnosticsView: View {
                 Text("Diagnostics (\(bluetooth.diagnostics.events.count))").font(.subheadline.weight(.semibold))
                 Spacer()
                 Button("Copy Diagnostics") { bluetooth.copyDiagnostics() }
-                Button("Clear") { bluetooth.clearDiagnostics() }
+                Button("Clear") { accountID = ""; bluetooth.clearDiagnostics() }
             }
             Text("Copied diagnostics exclude device identities and raw data.").font(.caption2).foregroundStyle(.secondary)
             DisclosureGroup("Event log") {

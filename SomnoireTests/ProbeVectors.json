@@ -73,6 +73,505 @@
           "ciphertext": "4d4d4ea1341587d2fd235556885737e7",
           "result": -1
         }
+      ],
+      "display_request": "3a9175ad8a81110ae12a1e718a1c4a9bfff89fcf458d979610cace74b444cca1",
+      "access_cases": [
+        {
+          "name": "normal-check",
+          "ciphertext": "e04b3ff5c71176249f773d79de22cefdaf02b58054f3f8db227e468a88332e0a",
+          "kind": 1,
+          "action": 2,
+          "mode": 1,
+          "telemetry": ""
+        },
+        {
+          "name": "response-control-differs",
+          "ciphertext": "47429fc760100bac6a525e5fce15ea4c67d3384ee63a9fa3870ab95156d5fced",
+          "kind": 1,
+          "action": 2,
+          "mode": 1,
+          "telemetry": ""
+        },
+        {
+          "name": "normal-set",
+          "ciphertext": "e04b3ff5c71176249f773d79de22cefdcbbf68a73c3ad0d604c9a6796c56554f",
+          "kind": 1,
+          "action": 1,
+          "mode": 1,
+          "telemetry": ""
+        },
+        {
+          "name": "omos-check",
+          "ciphertext": "e04b3ff5c71176249f773d79de22cefd9ed30c6ba7fc1a0e93a17cbac1384160",
+          "kind": 1,
+          "action": 2,
+          "mode": 2,
+          "telemetry": ""
+        },
+        {
+          "name": "unknown-action",
+          "ciphertext": "e04b3ff5c71176249f773d79de22cefd29f9d53ac23b93692a72135f7daa4527",
+          "kind": 1,
+          "action": 0,
+          "mode": 1,
+          "telemetry": ""
+        },
+        {
+          "name": "unknown-mode",
+          "ciphertext": "e04b3ff5c71176249f773d79de22cefd228540e2d6a146f9bd921e1d8b336163",
+          "kind": 1,
+          "action": 2,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "short-status",
+          "ciphertext": "631695ba15ebc505265890451de493d6159b40f02ff8aadb3d8230cbd6e2d0fc",
+          "kind": 1,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "long-status",
+          "ciphertext": "9c723f5a3d0311c285401273fb22e73f385555404d0fa3555ce43c0d89a45a33",
+          "kind": 1,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "request-reply",
+          "ciphertext": "0a96870e0cfcc82ce46a135a59c5ca1fe2687bd97a6b0ea83c9cdbce5388d11b",
+          "kind": 2,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-reply-command",
+          "ciphertext": "61a4895972b88c655e46b93efcc0bc6e482cc961c5880da35364e3987d0c51e8",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-reply-sequence",
+          "ciphertext": "93030986ab6d58a74d3341348298bff5e59430f69a9f5e4b9987b4e90a1d2760",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "display-active",
+          "ciphertext": "0baf0329a0220d680e99a6e638ae59191f168e3cb9f46ad854572158aad96ced",
+          "kind": 3,
+          "action": 0,
+          "mode": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "display-reply",
+          "ciphertext": "7e6d8b15267bdd7e32d388ad2a2a80ab278ef15813617e4133937e275885db2a",
+          "kind": 3,
+          "action": 0,
+          "mode": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "wrong-display-source",
+          "ciphertext": "4be383f3a5ca6c70ac6b1fd75c4a88b4bf01d484704d88958a8b73a1abfa8543",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "mixed-route-v3-excluded",
+          "ciphertext": "8b8a76ccecbd50c1dc5292fa5c69cc6acc2af6a88edc1f6c70d0a3f9030953b4",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-display-destination",
+          "ciphertext": "53df6fd28925cf240ba08aa1c08e7894a8793b76f387cf7b9afae33bd7135227",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-display-routing",
+          "ciphertext": "f08b421715ac87e67c72142fddb5002127c74ba16a43f2c07dcaa67531b06593",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-display-command",
+          "ciphertext": "7e6d8b15267bdd7e32d388ad2a2a80ab9a61fcf9d08d0857d6240abcacaf0958",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "provisioning-reply",
+          "ciphertext": "631695ba15ebc505265890451de493d6b6ba606952a9e775aeae213b1d361a76",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "credential-check-reply",
+          "ciphertext": "631695ba15ebc505265890451de493d6e08721bf9839903e67ecbde631064f8c",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "unbind-reply",
+          "ciphertext": "631695ba15ebc505265890451de493d65505166666096238cb0a257a305f8a5b",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "bad-display-crc",
+          "ciphertext": "7e6d8b15267bdd7e32d388ad2a2a80ab29af6e406aedb477a9c50acddbed871c",
+          "kind": -1,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "unsupported-display-version",
+          "ciphertext": "06ec124b47379e5dd9c77add2b323e3d58fd9532f4101176f0543da3625886b0",
+          "kind": -1,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        }
+      ],
+      "credential_request": "87036e8b65d39b5a091512e68a3576d734930ce40a86da331ab670f56604f2aa455e6af065bf6afd57314dd0f8a6072152c3182dc2a5a11f0b3545b254363dfa",
+      "credential_cases": [
+        {
+          "name": "accepted",
+          "ciphertext": "a96fa63d1140a93039e51fb036444a1647513b90d0e94fc17f1355989c89efe1",
+          "kind": 4,
+          "accepted": 1
+        },
+        {
+          "name": "accepted-different-control",
+          "ciphertext": "ace5b6f827637c7d52cdd8490119e74d6d470bd44782608c837485f7f35e1df9",
+          "kind": 4,
+          "accepted": 1
+        },
+        {
+          "name": "accepted-app-first-byte",
+          "ciphertext": "3987eb63a945c6484b59a87e7ef59add8017d77f19e8204516c7d2d376eefa17",
+          "kind": 4,
+          "accepted": 1
+        },
+        {
+          "name": "rejected",
+          "ciphertext": "a96fa63d1140a93039e51fb036444a1674be1d4bed24dbbafd35c695ea075f07",
+          "kind": 4,
+          "accepted": 0
+        },
+        {
+          "name": "unknown-result-rejected",
+          "ciphertext": "a96fa63d1140a93039e51fb036444a16b4eb1ebc453b0d24af4d4117f74e4713",
+          "kind": 4,
+          "accepted": 0
+        },
+        {
+          "name": "empty-reply",
+          "ciphertext": "e754c9cabba1b5f912305e764012b54e231e4d6608359172a6016057bc84300b",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-sequence",
+          "ciphertext": "6988089b1cc1afe1ded5733cec7bb714ed10cd33431f21f0043aeff95bfb0698",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-source",
+          "ciphertext": "96b894506b941645df48a36aa02662294e3df5911054346869abe884e4b4dd0a",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-destination",
+          "ciphertext": "764e212e01cc4b9b85d945f4a03da1c1a4a166b6e517d67267ddf55a7b4caa5f",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-device-source",
+          "ciphertext": "159884ef9ff7f86181d8bd25e31d125eabf9bc4560e452f35bbf82ee6655fcb7",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-device-destination",
+          "ciphertext": "b823ed2178d15fdb06faae5d499864db40c3494fb6e5d3650cf8914ae55038b3",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-command-set",
+          "ciphertext": "a96fa63d1140a93039e51fb036444a16f83c0affc8601295b03fdeb81d1f15ca",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "provisioning-not-check",
+          "ciphertext": "a96fa63d1140a93039e51fb036444a161cb7e56e71fb004c7d7a728efb6446ab",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "bad-crc",
+          "ciphertext": "a96fa63d1140a93039e51fb036444a16ab68d86a962e87aa961a7d1d8a0c5e14",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "bad-header",
+          "ciphertext": "89eee9c15583a2f10feb6563cbe9a2f4081392556beed0a16c8df61e7b7393f5",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "bad-length",
+          "ciphertext": "3987eb63a945c6484b59a87e7ef59add1d4090227858c9211c8740be773867a0",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-version",
+          "ciphertext": "718696552026ff522dfea6f872fa1eeb02bd570c6bc5b964b404454dac8d49f5",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "bad-padding",
+          "ciphertext": "7ec83de8a55f2410c6939eceded655e17d983c31dd81c4c954b08f07ae294cc9",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "short-inner",
+          "ciphertext": "4d4d4ea1341587d2fd235556885737e7",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "other-inner-version",
+          "ciphertext": "83ef37f95d596468faf41bdd3549674c740e93678f05dd896d36d57e38c0978a",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "zero-padding-valid-prefix",
+          "ciphertext": "a96fa63d1140a93039e51fb036444a166c7ddd5c05e079de9f66bb582b2db988",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "inconsistent-padding",
+          "ciphertext": "a96fa63d1140a93039e51fb036444a16e27be425ba7a1e424f7faadb416c0d68",
+          "kind": -1,
+          "accepted": 0
+        }
+      ],
+      "v19_cases": [
+        {
+          "name": "display-xor",
+          "ciphertext": "5bd2c02dbcf3d9c1de41b33bfcb8eae53ad389763a063db8c781ca3b10bbc0c9",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "display-key-zero",
+          "ciphertext": "416b67bca841f428ab66eab3120e546542b85ca58c5c468ac9f34527c1ce038d",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "display-key-255",
+          "ciphertext": "4a019ae9013d7553d1b0ead95892d265de2f94e5e0efaf69a597e6cab1806925",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "display-plain",
+          "ciphertext": "7dcd45b52d509aadf52302a7633f3c6cbf9f8b8d467d73b22f886f5a5291a0de",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "observed-bank-route",
+          "ciphertext": "f6559283335989f246febe23af0aa84f314ae246750f5eca8a0b1f515bd9f6cf",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "reverse-mixed-route-excluded",
+          "ciphertext": "456648acd17ccae101cc33a7fbea1ceeb0b0cb5433b6f41a8009e448c2b0fc4c",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "display-no-check",
+          "ciphertext": "3bcf46be5736a16ba97e5d93ca40fe14610c54b31a634b0aa869b18aecc5607c",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "display-no-check-one",
+          "ciphertext": "eec74080b91246044ffa7e2e9564400a1222188b167f177be50947276f0c5744",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "display-crc8",
+          "ciphertext": "fb5dc16990d4e580d578205c2c045ce58230ed29d297c214f6d4cfb056b56d63",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "report-reply",
+          "ciphertext": "2ae856a14a92e4f425e9c9da69cd97b98109dbdc2f6688bdccad6dc7bc8c30ef",
+          "kind": 2,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-source",
+          "ciphertext": "6ef1ae4d06c7e949b4d8de8923abf0f2bc5c4a73da20ac7dec18292b8a5f47d8",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-destination",
+          "ciphertext": "eff915a99dd11445ce8e48d8c06066521f699716dff8dc27831ce346100fce92",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-route",
+          "ciphertext": "b2cdc49815dc575cadc21abe7907f74a1e688db0d7ac4976c2736d1344a83623",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-command",
+          "ciphertext": "5bd2c02dbcf3d9c1de41b33bfcb8eae5cb5e301f9e5ee4ccbd3cd1ab45ccd736",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "observed-fe12-remains-unclassified",
+          "ciphertext": "6b38c2c0cf929020009c9843e8914dc9f1f72841fa609f8620f5550623172bcd",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "cannot-authenticate",
+          "ciphertext": "9745b53e981207cdd90c55527c3a0371afa5f54a34dc56ec42c36654357f6761",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "bad-header",
+          "ciphertext": "ed4735cf9411ea0cd01073633d5ffb79006edcfaa2ae9c1c567f6034220542e0",
+          "kind": -1,
+          "failure": 3,
+          "telemetry": ""
+        },
+        {
+          "name": "bad-length",
+          "ciphertext": "d08be2c81d6de2ae1e495fe77b5e438ac18746736fac5df7dee9cac8839db701",
+          "kind": -1,
+          "failure": 8,
+          "telemetry": ""
+        },
+        {
+          "name": "truncated",
+          "ciphertext": "5bd2c02dbcf3d9c1de41b33bfcb8eae5fb5c4f9e9e9e20a5e6aeb929d773eb3d",
+          "kind": -1,
+          "failure": 8,
+          "telemetry": ""
+        },
+        {
+          "name": "trailing-data",
+          "ciphertext": "5bd2c02dbcf3d9c1de41b33bfcb8eae5b1e1cbcfa85fb649e1bc2f5bbf564ea0",
+          "kind": -1,
+          "failure": 8,
+          "telemetry": ""
+        },
+        {
+          "name": "bad-checksum",
+          "ciphertext": "5bd2c02dbcf3d9c1de41b33bfcb8eae51c77b2ddc072b2a294752df78bd04a05",
+          "kind": -1,
+          "failure": 9,
+          "telemetry": ""
+        },
+        {
+          "name": "unsupported-encoding",
+          "ciphertext": "fdde00a35b957306411ca2cfec6dd138073546a8b2ff7f40d6813b087a046a86",
+          "kind": -1,
+          "failure": 9,
+          "telemetry": ""
+        },
+        {
+          "name": "unsupported-check",
+          "ciphertext": "fe79ffb50ac8b36e7da075e11ac79419383022ada14766861d09eb59330e2e68",
+          "kind": -1,
+          "failure": 9,
+          "telemetry": ""
+        },
+        {
+          "name": "old-incorrect-layout",
+          "ciphertext": "9fd9c3c953d584d70212eb3fb23e5d0b35b127efd08f921d7468b796df87be49",
+          "kind": -1,
+          "failure": 8,
+          "telemetry": ""
+        },
+        {
+          "name": "over-limit",
+          "ciphertext": "6d5c69ef4cdbda8f4faf3922867ec4f7c66f8a121301d9f5441ad5f50061084e88f7f26263536fab8586e1037d9a8d8e392b4f808a7ead3b66efe010c41e826a15884eeb5473d6dd416169dc2824f8185f27588e08aa21e65f58ca3d4b00d738bd0c91ca511bfb4840052aa85e2854719b3f5fe9209282c06ad29e9e4a59913dbd1317dca6cf52fb71ae847576ecc2de6e342fd484941568ea0b529a3c4cefda04aef0d88ab044b64fec313fab334ee1336829c77a69cce4748f321742120b13ef20207665b7b75857bcbd9016bf17cbb9404a23654c5a0b344160b8054e1f7a7f3ff3ed3eea663f116c615911dad51f93a0b1fad8d7aa85c5c13c72f47cbef6673714290836c58b4fd1f394003edede3ab877b7e5ff8baa50cf76e15cf435c20860b9b4bb86c09580b901cac5d36aae1a7cf15537f21db8845417eec72e273749e5627dd1548392c445c338f20741deba02a12b286f336a480a382fc633ed4782ea365414fd021c153bdab81a5f160caadb3caf7c75f566a1136eb8a1ab20f6c2a18a7b6fc6d8690955025e991bf296d7b789e5d4346a8cadcf8d1fa04a0e309e65af4680c2e5fd77ef6aacd3687d4481aec6fb8b9dc8a8cdd9db31b008df826c2bab9d2bd884de79f5b7152879539c736ccf8508ac833d715abae08c5f458a9e5d06c6f4f92decbfd5f60c79a503b215e2479cf9d63bcfc4d6c2290bc8bc49c82dc1b820d1becdf9d28c86db1206826e83aa588eb56d776f51cb045dd613996714b0d2a9711884ea8689a7a5095460fac241ad4b45f46b8f056fb18360fcdf050ac347a3f303c10f49f6c92ebf6283b3a5e8092bf98528e1dd328f72ec81d45a176f9f49b6d3dd3f923644d532405280b6eb4a47fe2a59e1b0cdec459c6a65cdc016a2c89f0b0df41bbad37b8976589f0958641d50e21353f1c6773d69653854b7fcfefc674b925b6e628627162494de7ac4d68ce29081dab2d1d6a9d769b849249bfbaefff5ae35685e1ebb6dccab2b7b0559b6890303c5e3583397df6a161198cea3f8ff2dc1ab8caf7d47e31e97ac3bddf7701cf7b5c3b998b74682e8fb6cdfb1f5bf51bbe1248d2945f099074f313398fc05e0ef4014e0afa8821d68895f36b30492d0d21ec2cf3d6c6bd702d98791801775d079cc86134901c958292f21380c31926a8ffdc01940adf5a053b9250fb8a741aaae5ce1f23a45a1657a952a6166136a0fc91e0b7c7da150c9eecba2ea4780370d9ff3fde2ec2dc013adf9dfea3f37602782bb28589f00e4ae55b0e6175e2312f1f0225647aa740616c59445ca459d0298da6266b9e1610756a668b21fd9e2d37cb24adbe641a00162581d4b2baa7c25a2da57d57c1741599420d398181bff4c000c1c5545987f0727cd877c164bb71f3b2cfb218a86a02ee7d400",
+          "kind": -1,
+          "failure": 8,
+          "telemetry": ""
+        }
       ]
     },
     {
@@ -146,6 +645,505 @@
           "name": "too-short-inner",
           "ciphertext": "cebfcc2fdc4eede7253f4f0f964d1619",
           "result": -1
+        }
+      ],
+      "display_request": "4546bdd13ebaa419ceb6197be450c42a24212a3e839795f7505e7d093b18a3ba",
+      "access_cases": [
+        {
+          "name": "normal-check",
+          "ciphertext": "8d022338ea3380928a818d3810647745316dd2e71240790f55bb2658c8c73765",
+          "kind": 1,
+          "action": 2,
+          "mode": 1,
+          "telemetry": ""
+        },
+        {
+          "name": "response-control-differs",
+          "ciphertext": "fa22cc9052537af07773657903675112ac649a6306730f48052999b23e92ea08",
+          "kind": 1,
+          "action": 2,
+          "mode": 1,
+          "telemetry": ""
+        },
+        {
+          "name": "normal-set",
+          "ciphertext": "8d022338ea3380928a818d38106477458b5d0dc2cc15248686b6867d4228dac4",
+          "kind": 1,
+          "action": 1,
+          "mode": 1,
+          "telemetry": ""
+        },
+        {
+          "name": "omos-check",
+          "ciphertext": "8d022338ea3380928a818d3810647745677d6a77c723f6bfa874accca86ed36e",
+          "kind": 1,
+          "action": 2,
+          "mode": 2,
+          "telemetry": ""
+        },
+        {
+          "name": "unknown-action",
+          "ciphertext": "8d022338ea3380928a818d38106477455859de711406e08fe05b86e42d99f923",
+          "kind": 1,
+          "action": 0,
+          "mode": 1,
+          "telemetry": ""
+        },
+        {
+          "name": "unknown-mode",
+          "ciphertext": "8d022338ea3380928a818d38106477459eb52f5200fced7842788c0a59833c35",
+          "kind": 1,
+          "action": 2,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "short-status",
+          "ciphertext": "c55ec1bd08d325d34232b92189a0b4823ce80da14ee01b741033a9222f318258",
+          "kind": 1,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "long-status",
+          "ciphertext": "b112fd304d611130afc530d77cb9bd99a308787ef3cb97a0af282a9167fb40a9",
+          "kind": 1,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "request-reply",
+          "ciphertext": "9551a9755aef1ebfeff8fc199bba38dbcb04d6060743baf93a6362e0bb207c92",
+          "kind": 2,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-reply-command",
+          "ciphertext": "b157fbdf8ba9b061d07f345d7e3e2d210d43b13e002271b06e2da47f5ca07127",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-reply-sequence",
+          "ciphertext": "1f3d03e303e9933678c97041bbc479d618ab309e75973898411e27fb2d37aacf",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "display-active",
+          "ciphertext": "74c8234ed3c6b36c68eade47c926f7c271149153a8152332e6a6bc907b42a749",
+          "kind": 3,
+          "action": 0,
+          "mode": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "display-reply",
+          "ciphertext": "49606644fa31b434f4ed3a59cc437364300b0b49299ec94d31794766dabeed2e",
+          "kind": 3,
+          "action": 0,
+          "mode": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "wrong-display-source",
+          "ciphertext": "57e2104720babfe89732b427b27d517272a4e56209d33c369b8a73f3599722f3",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "mixed-route-v3-excluded",
+          "ciphertext": "2d68a03b910beb0bd87f3357ffa5add06bf9f354c7f8262198e964d0f3720544",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-display-destination",
+          "ciphertext": "8b9df0ca662ff10c068a1420a4c7b76a00fae15cecb5dc4830406aadf14ba129",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-display-routing",
+          "ciphertext": "f0887570a25096c0e9bd1c39f28e5e35511b91469688b5f87a5a10e7ce9ba370",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-display-command",
+          "ciphertext": "49606644fa31b434f4ed3a59cc437364424e123c6e0e86fc403fbf8fd026c8d0",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "provisioning-reply",
+          "ciphertext": "c55ec1bd08d325d34232b92189a0b4826847bf7b98a77d011296bf1fcf37b9b6",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "credential-check-reply",
+          "ciphertext": "c55ec1bd08d325d34232b92189a0b4829f733abf8299f4f27f4a084633d91817",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "unbind-reply",
+          "ciphertext": "c55ec1bd08d325d34232b92189a0b482630cf96c30483b6a4bea7add0bda1fa5",
+          "kind": 0,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "bad-display-crc",
+          "ciphertext": "49606644fa31b434f4ed3a59cc437364420e8ac63e95ee93749d285a49d24c7d",
+          "kind": -1,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "unsupported-display-version",
+          "ciphertext": "172930d3100a69632864883d9610e3ecb9b2a25c8ab7899b9bc0c376d6f2bc8e",
+          "kind": -1,
+          "action": 0,
+          "mode": 0,
+          "telemetry": ""
+        }
+      ],
+      "credential_request": "acb73416ea37960f400de5934ba8a48f23bd28ec183598de6ccedeaec94df73e56fd3e1b96a170579b93323b66180252e3c189e55c4b18cdef9fdd7b93969c62",
+      "credential_cases": [
+        {
+          "name": "accepted",
+          "ciphertext": "565cf5561c167042e9dc410ccd77358da747af6187611b75b9feed470af6c623",
+          "kind": 4,
+          "accepted": 1
+        },
+        {
+          "name": "accepted-different-control",
+          "ciphertext": "9ef63f8fa8029c9e6488543ce2bcaddf1ee12e2508288e792cce6066e5513553",
+          "kind": 4,
+          "accepted": 1
+        },
+        {
+          "name": "accepted-app-first-byte",
+          "ciphertext": "4b32c449c5174a40b04065c8724888e0968ec172f7c4648512f98f53491f6e0e",
+          "kind": 4,
+          "accepted": 1
+        },
+        {
+          "name": "rejected",
+          "ciphertext": "565cf5561c167042e9dc410ccd77358d7370094c2da2010bb7996ae9761e0ba7",
+          "kind": 4,
+          "accepted": 0
+        },
+        {
+          "name": "unknown-result-rejected",
+          "ciphertext": "565cf5561c167042e9dc410ccd77358d77076412af641e19ae15f2e55f9fb0cd",
+          "kind": 4,
+          "accepted": 0
+        },
+        {
+          "name": "empty-reply",
+          "ciphertext": "0f4f40695af7cea341508cd7e8fdf36fba6617573ecb15f7662184ad55ab4990",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-sequence",
+          "ciphertext": "003f08d6800188f28f3476bc28e5429d74216c2b5a9572178c111a4f2385517d",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-source",
+          "ciphertext": "1c19a81c0c9b6946550bb5a438bdbac8298c40b7fe27f0b2e04f94203d981b26",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-destination",
+          "ciphertext": "3d2223755ba079bde50a12283cdb6a1c37b240da64a28fec34c43acd4961bbd3",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-device-source",
+          "ciphertext": "1bd8af77212238dd653f35f423451076ad6383a7193b83f96a2f09809d4aa207",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-device-destination",
+          "ciphertext": "8e03cd987af8b3c8c04defd48c03bad3ee484a284a0b966ead5b92b9c4f6eb51",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-command-set",
+          "ciphertext": "565cf5561c167042e9dc410ccd77358da20e2b64570822ce4461d058360282da",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "provisioning-not-check",
+          "ciphertext": "565cf5561c167042e9dc410ccd77358d81bb3650046122f2432d042fcd4e8ecf",
+          "kind": 0,
+          "accepted": 0
+        },
+        {
+          "name": "bad-crc",
+          "ciphertext": "565cf5561c167042e9dc410ccd77358d11172cd8d83fb2e1e1ad32a495f4ad10",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "bad-header",
+          "ciphertext": "07890fcfd5fa03e90d673458953686c536dd899df9070c12164541200c10eaf5",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "bad-length",
+          "ciphertext": "4b32c449c5174a40b04065c8724888e0cfe3e54be0bc7ade27f5d53c2335be57",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "wrong-version",
+          "ciphertext": "892e821138ed52ea39a370514b141a98d0fc454a7624932db6c9703c140e31df",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "bad-padding",
+          "ciphertext": "ed94a0084b248f4ab167b316be002bc5651fd85328cb877a8fd2d3ca81c73771",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "short-inner",
+          "ciphertext": "cebfcc2fdc4eede7253f4f0f964d1619",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "other-inner-version",
+          "ciphertext": "741c8b7dcfa7c775d8ab794ae2b4d44d076db72060db050f03c8fa11dd319f76",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "zero-padding-valid-prefix",
+          "ciphertext": "565cf5561c167042e9dc410ccd77358da8345e0ca1a17f3a8c2a9ad4a2dd2a96",
+          "kind": -1,
+          "accepted": 0
+        },
+        {
+          "name": "inconsistent-padding",
+          "ciphertext": "565cf5561c167042e9dc410ccd77358d59c9fdf12a285300fb3e83784ae16d55",
+          "kind": -1,
+          "accepted": 0
+        }
+      ],
+      "v19_cases": [
+        {
+          "name": "display-xor",
+          "ciphertext": "9c4a1d80f4e080aafadbdb47f439815ee6f3d5dda63d856964f857aaf21bcb36",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "display-key-zero",
+          "ciphertext": "4aad0a58dbdf5e1ff0ca9ae8e1ba5cc6d0d3627431caed0801e0f110ee7a58f3",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "display-key-255",
+          "ciphertext": "567cc378716b29187d79f21a6f8be7550912628472c0c5aae03a675f478de84a",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "display-plain",
+          "ciphertext": "73e4ddf8e214cac41014f25cea2fab334a08db43f113aab28f55930a170b049c",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "observed-bank-route",
+          "ciphertext": "1da7b25b53783d1d0c2f01b4ecaa77098c3dab246c653688dbd784fcfb1eb9d6",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "reverse-mixed-route-excluded",
+          "ciphertext": "0c69d268c834fab5656b40b65ce0a27de9ed3ddf0bdceca2f68c8d45199e726c",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "display-no-check",
+          "ciphertext": "7a519441f562a3019c12edc3b3c50a65c7c461406df935d432bc4b83313ad12d",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "display-no-check-one",
+          "ciphertext": "72a2e78528b0cedcaa167cec7c9c510ed35ef7148c2de747ee2e8b3879db3ec3",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "display-crc8",
+          "ciphertext": "e32871e0e072935fc3cd087301c9851621bf769822cc9b0846cc4fc3e3eb7334",
+          "kind": 3,
+          "failure": 0,
+          "telemetry": "a235050d000020c2"
+        },
+        {
+          "name": "report-reply",
+          "ciphertext": "48fb54eec38c80eed607283b513115fca5f3a637a43467e4b6bf72abf4156b82",
+          "kind": 2,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-source",
+          "ciphertext": "6578321a3d254bca1cde1a730cab3419bafc4472ba1fde9d3e6753d38e81cea0",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-destination",
+          "ciphertext": "9f1c00fcfd275d5277b3affca031bd8fdbb3e1d5a7a537dc5dee90d563f210b7",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-route",
+          "ciphertext": "205706aa114a0a3cb2bf5025d1d741c874b0ddc387be091a518c4f1486740c84",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "wrong-command",
+          "ciphertext": "9c4a1d80f4e080aafadbdb47f439815e5c7e18dca6e5dabd92c3b712a803c346",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "observed-fe12-remains-unclassified",
+          "ciphertext": "61f267ddcf7e39f641bb6a9dd66ccb4571c900fed419f9638b1c70bff27c02f5",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "cannot-authenticate",
+          "ciphertext": "d0f92c4ffeb56981c92415ea6b7e748b75ed0f355dcb0534b829dc32903e5378",
+          "kind": 0,
+          "failure": 0,
+          "telemetry": ""
+        },
+        {
+          "name": "bad-header",
+          "ciphertext": "573b1f7a27c101899dfad59fca522f914d52011e1315831aca36b39378e02768",
+          "kind": -1,
+          "failure": 3,
+          "telemetry": ""
+        },
+        {
+          "name": "bad-length",
+          "ciphertext": "afb3a928f83e7b5c38b86442840d3d5fabd08786c5e0bcfb8b09aa8ef68ca02c",
+          "kind": -1,
+          "failure": 8,
+          "telemetry": ""
+        },
+        {
+          "name": "truncated",
+          "ciphertext": "9c4a1d80f4e080aafadbdb47f439815efd3fbb55ffa57e46f7175ec033f49635",
+          "kind": -1,
+          "failure": 8,
+          "telemetry": ""
+        },
+        {
+          "name": "trailing-data",
+          "ciphertext": "9c4a1d80f4e080aafadbdb47f439815eb1018c64f05bd167050aad800fed234e",
+          "kind": -1,
+          "failure": 8,
+          "telemetry": ""
+        },
+        {
+          "name": "bad-checksum",
+          "ciphertext": "9c4a1d80f4e080aafadbdb47f439815e4446205d5dfea84ae48158c80ba5f5d1",
+          "kind": -1,
+          "failure": 9,
+          "telemetry": ""
+        },
+        {
+          "name": "unsupported-encoding",
+          "ciphertext": "132b1cbc0b7fb81905329a882dc4518d6258a6467c6e2a1e96010ea02bc5d3cc",
+          "kind": -1,
+          "failure": 9,
+          "telemetry": ""
+        },
+        {
+          "name": "unsupported-check",
+          "ciphertext": "7e023343a659579ce5a99b90569269d69dbbbf88f3511e2e6b06d57cb231558a",
+          "kind": -1,
+          "failure": 9,
+          "telemetry": ""
+        },
+        {
+          "name": "old-incorrect-layout",
+          "ciphertext": "99a70ca8f78f8e8e1eab6c81f0c895f913555d422e0c7e08665a5e3348292871",
+          "kind": -1,
+          "failure": 8,
+          "telemetry": ""
+        },
+        {
+          "name": "over-limit",
+          "ciphertext": "a79fb5851e113b865e91160ccfb6eba84974e21c7a4471a6b21589343b2b7e9bc2042b657d8a0b4d40662018a3d3f6ad84f2eab882c99fb15248bf947567a5b45905f006626c55aa71e008a73786bfcab00157e3b819bd28c4c12a9d31279d3676612a4bd930bc0a501e0407ca5ec67cfdb9511d3d083bc341ede24288d2dc553a9c64c07083f8a01b4444fa6808f5df1638292865702fddac84ab5299071d26ad17cdfa5b58bf9e90269c06f4bbc216dbc84310ab436a49e95b6deb8cc478e3ebc4e038ab068e913329190b7bbbd796b588414a73bad4bb3fab3e7f1a3077aeeee43d70d8ded3abf52676c379edc1264b9c4add8c749d8e7508b24f6d346904f0c17fd6d9a7c31220871aa186df95d0d153e64cd760ee3f5ef56330b85d2a23d87a3a0ae8b98d2e996bb4a82f30613c54865e2805c09c86f94d22489fb000b5418db5e451b01cf1359260dda53587a34124c7b46f2f298858e488a2e7aa83c2b9bc90ffeb3872ee29e935d2de25711504d18ae518e82a8d8d2957487354cbcd237c5572bfa0a472658998e570c2fa822102075de684dc356ebc38166e2e6fe17ae6dac23102ad8d7ad632aec0d775e770a20a2bc09a831bcbb460e60f06d4ca69ecce273a3587d6954f45c929946a045bbc54035b88c354372b1fcd990b896bf2acc807759160720bfa6bb593cd4d55c905500a469a779d311287e23f572446a43e50807760ce5749333b6b2a0142d23911606211bd60205f64eb9cfa4767f693c09c3c003d1c4d88cd081b5e3e46ce3d2cf125d9e90b84a29180bda5d3e79ea51a1a9c58d4f3f09f1b3529a2782dedc042d78ebd1d4b2f80dbc566879628732845f14beb2f278bc382bdd59c8ca0aa5445bab4d13658d4799a378135e350ef4207a49576339d6448cb9577fc987c4152a2fe75ff9eb56d8c47203b751c92d96d20adfa42c7b68c710f48be39e3e2047177fbed9685d8c2580862dea221fc2798d4b0da96ab4d86e855e047a9e98d1f52299b026bfd0a52293a856089380b9e5c3a8fec71efb78315612d0c1019a215b803bf1e9da4651c486df878344dd8e97205e5486b588c77f33b0bc74de3d0aabe8d11171e4dcdb9b2151e7afb00e3c2c329224c42a094aa86dc39ba9a78203c83915ebc2815f8d11e09462ec40d54d771ca852182136c87e1d704e13117a507e80ccfa6b000233895f37db32e62fef9ca47a14d259c3f72153a5642bb31cc2694a6efa6539e8ec9f5576238b441802d67281d7eb6a1f7a7c0c297c441469c39e37d29cfed49ffbff6330d517327808a616c27bb8426f422ccce85880824ee07ea140ece857bf387225182aa531ac67a02550ea158d2510d879f3ef91b3b11335d59d390ad3649ca5a695ef8731ebbcd24aa478a326ef8026445a3c32bea6b5b",
+          "kind": -1,
+          "failure": 8,
+          "telemetry": ""
         }
       ]
     }

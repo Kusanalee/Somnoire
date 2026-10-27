@@ -31,9 +31,9 @@ def crc8(data):
         for _ in range(8): value=((value<<1)^7)&255 if value&128 else (value<<1)&255
     return value
 assert crc8(b'123456789')==0xF4
-def packet(src=0x35,dst=0x21,dsrc=1,ddst=1,cmd=0x89,seq=0,version=3,payload=b'\x07',bad=None):
+def packet(src=0x35,dst=0x21,dsrc=1,ddst=1,cmd=0x89,seq=0,version=3,payload=b'\x07',bad=None,cmdset=0x35,control=0x0d):
     b=bytearray([0xAA,version])+bytearray(len(payload).to_bytes(2,'little'))
-    b+=bytes([crc8(b),0x0D])+seq.to_bytes(4,'little')+b'\0\0'+bytes([src,dst,dsrc,ddst,0x35,cmd])+payload
+    b+=bytes([crc8(b),control])+seq.to_bytes(4,'little')+b'\0\0'+bytes([src,dst,dsrc,ddst,cmdset,cmd])+payload
     if bad=='length': b[2]+=1; b[4]=crc8(b[:4])
     if bad=='header': b[4]^=1
     b+=crc16(b)
@@ -61,10 +61,115 @@ with tempfile.TemporaryDirectory() as directory:
         status_cases=[{'name':n,'ciphertext':session_encrypt(p),'result':r} for n,p,r in cases]
         status_cases += [{'name':'bad-padding','ciphertext':session_encrypt(bytes(32),True),'result':-1},
                          {'name':'too-short-inner','ciphertext':session_encrypt(b'\xAA\x03'),'result':-1}]
+        telemetry=bytes.fromhex('a235050d000020c2')  # Public synthetic -40W USB-C1.
+        access_cases=[]
+        for name,params,kind,action,mode in [
+            ('normal-check',{'payload':b'\x01\0'},1,2,1),
+            ('response-control-differs',{'payload':b'\x01\0','control':0x08},1,2,1),
+            ('normal-set',{'payload':b'\0\0'},1,1,1),
+            ('omos-check',{'payload':b'\x01\x01'},1,2,2),
+            ('unknown-action',{'payload':b'\x02\0'},1,0,1),
+            ('unknown-mode',{'payload':b'\x01\x02'},1,2,0),
+            ('short-status',{'payload':b'\x01'},1,0,0),
+            ('long-status',{'payload':b'\x01\0\0'},1,0,0),
+            ('request-reply',dict(src=2,cmdset=0xFE,cmd=0x11,seq=1,payload=b'\xb8\x04\x01'),2,0,0),
+            ('wrong-reply-command',dict(src=2,cmdset=0xFE,cmd=0x12,seq=1,payload=b''),0,0,0),
+            ('wrong-reply-sequence',dict(src=2,cmdset=0xFE,cmd=0x11,seq=0,payload=b''),0,0,0),
+            ('display-active',dict(src=2,cmdset=0xFE,cmd=0x15,dsrc=0,ddst=0,seq=7,payload=telemetry),3,0,0),
+            ('display-reply',dict(src=2,cmdset=0xFE,cmd=0x15,payload=telemetry),3,0,0),
+            ('wrong-display-source',dict(src=3,cmdset=0xFE,cmd=0x15,payload=telemetry),0,0,0),
+            ('mixed-route-v3-excluded',dict(src=2,dsrc=1,ddst=0,cmdset=0xFE,cmd=0x15,payload=telemetry),0,0,0),
+            ('wrong-display-destination',dict(src=2,dst=0x20,cmdset=0xFE,cmd=0x15,payload=telemetry),0,0,0),
+            ('wrong-display-routing',dict(src=2,dsrc=2,cmdset=0xFE,cmd=0x15,payload=telemetry),0,0,0),
+            ('wrong-display-command',dict(src=2,cmdset=0xFE,cmd=0x16,payload=telemetry),0,0,0),
+            ('provisioning-reply',dict(cmd=0x85,payload=b'\0'),0,0,0),
+            ('credential-check-reply',dict(cmd=0x86,payload=b'\0'),0,0,0),
+            ('unbind-reply',dict(cmd=0x84,payload=b'\0'),0,0,0),
+            ('bad-display-crc',dict(src=2,cmdset=0xFE,cmd=0x15,payload=telemetry,bad='crc'),-1,0,0),
+            ('unsupported-display-version',dict(src=2,cmdset=0xFE,cmd=0x15,payload=telemetry,version=19),-1,0,0),
+        ]:
+            access_cases.append(dict(name=name,ciphertext=session_encrypt(packet(**params)),kind=kind,action=action,mode=mode,
+                telemetry=telemetry.hex() if kind==3 else ''))
+        display_request=session_encrypt(packet(src=0x21,dst=2,cmdset=0xFE,cmd=0x11,seq=1,payload=b'\xb8\x04\x01'))
+        # Public synthetic identity only; independent hashlib/OpenSSL reference.
+        identity='123456789'; serial='P512000000000000'
+        token=hashlib.md5((identity+serial).encode('ascii')).hexdigest().upper().encode('ascii')
+        credential_request=session_encrypt(packet(src=0x21,dst=0x35,cmd=0x86,seq=2,payload=token))
+        credential_cases=[]
+        for name,params,kind,accepted in [
+            ('accepted',dict(payload=b'\0'),4,1),
+            ('accepted-different-control',dict(payload=b'\0',control=8),4,1),
+            ('accepted-app-first-byte',dict(payload=b'\0\x01'),4,1),
+            ('rejected',dict(payload=b'\x01'),4,0),
+            ('unknown-result-rejected',dict(payload=b'\xff'),4,0),
+            ('empty-reply',dict(payload=b''),-1,0),
+            ('wrong-sequence',dict(seq=1,payload=b'\0'),0,0),
+            ('wrong-source',dict(src=0x36,payload=b'\0'),0,0),
+            ('wrong-destination',dict(dst=0x22,payload=b'\0'),0,0),
+            ('wrong-device-source',dict(dsrc=0,payload=b'\0'),0,0),
+            ('wrong-device-destination',dict(ddst=0,payload=b'\0'),0,0),
+            ('wrong-command-set',dict(cmdset=0x34,payload=b'\0'),0,0),
+            ('provisioning-not-check',dict(cmd=0x85,payload=b'\0'),0,0),
+            ('bad-crc',dict(payload=b'\0',bad='crc'),-1,0),
+            ('bad-header',dict(payload=b'\0',bad='header'),-1,0),
+            ('bad-length',dict(payload=b'\0',bad='length'),-1,0),
+            ('wrong-version',dict(payload=b'\0',version=19),-1,0),
+        ]:
+            args=dict(cmd=0x86,seq=2);args.update(params)
+            credential_cases.append(dict(name=name,ciphertext=session_encrypt(packet(**args)),kind=kind,accepted=accepted))
+        credential_cases.append(dict(name='bad-padding',ciphertext=session_encrypt(bytes(32),True),kind=-1,accepted=0))
+        credential_cases.append(dict(name='short-inner',ciphertext=session_encrypt(b'\xaa\x03'),kind=-1,accepted=0))
+        credential_cases.append(dict(name='other-inner-version',ciphertext=session_encrypt(packet(cmd=0x86,seq=2,payload=b'\0',version=4)),kind=-1,accepted=0))
+        credential_plain=packet(cmd=0x86,seq=2,payload=b'\0')
+        credential_cases.append(dict(name='zero-padding-valid-prefix',ciphertext=session_encrypt(credential_plain+b'\x0b'*10+b'\0',True),kind=-1,accepted=0))
+        credential_cases.append(dict(name='inconsistent-padding',ciphertext=session_encrypt(credential_plain+b'\0'+b'\x0b'*10,True),kind=-1,accepted=0))
+        def v19_packet(payload=telemetry,seq=73,src=2,dst=0x21,dsrc=0,ddst=0,cmdset=0xFE,cmd=0x15,bad=None,control=0x2d):
+            # Independent native-derived wire layout: length excludes trailer.
+            wire=bytes(b^(seq&255) for b in payload) if (control>>5)&3==1 else payload
+            raw=bytearray(packet(src=src,dst=dst,dsrc=dsrc,ddst=ddst,cmdset=cmdset,cmd=cmd,
+                                 seq=seq,version=19,payload=wire,control=control))
+            check=(control>>2)&7
+            if check<2:raw[-2:]=b'\xbb\xbb'  # Native checker ignores these bytes.
+            if check==2:raw[-2:]=bytes([crc8(raw[:-2]),0])
+            if bad=='length':raw[2]+=1;raw[4]=crc8(raw[:4])
+            if bad=='header':raw[4]^=1
+            if bad=='checksum':raw[-1]^=1
+            if bad=='old-layout':raw[2]+=2;raw[4]=crc8(raw[:4])
+            if bad=='truncated':raw=raw[:-1]
+            if bad=='trailing':raw+=b'\0'
+            return bytes(raw)
+        v19_cases=[]
+        for name,args,kind,failure in [
+            ('display-xor',{},3,0),('display-key-zero',dict(seq=0),3,0),
+            ('display-key-255',dict(seq=255),3,0),
+            ('display-plain',dict(control=0x0d),3,0),
+            ('observed-bank-route',dict(dsrc=1,ddst=0),3,0),
+            ('reverse-mixed-route-excluded',dict(dsrc=0,ddst=1),0,0),
+            ('display-no-check',dict(control=0x21),3,0),
+            ('display-no-check-one',dict(control=0x25),3,0),
+            ('display-crc8',dict(control=0x29),3,0),
+            ('report-reply',dict(cmd=0x11,seq=1,dsrc=1,ddst=1,payload=b'\xb8\x04\x01'),2,0),
+            ('wrong-source',dict(src=3),0,0),('wrong-destination',dict(dst=0x20),0,0),
+            ('wrong-route',dict(dsrc=2),0,0),('wrong-command',dict(cmd=0x16),0,0),
+            ('observed-fe12-remains-unclassified',dict(cmd=0x12,seq=1,dsrc=1,ddst=1,payload=bytes(7)),0,0),
+            ('cannot-authenticate',dict(src=0x35,dsrc=1,ddst=1,cmdset=0x35,cmd=0x86,seq=2,payload=b'\0'),0,0),
+            ('bad-header',dict(bad='header'),-1,3),
+            ('bad-length',dict(bad='length'),-1,8),('truncated',dict(bad='truncated'),-1,8),
+            ('trailing-data',dict(bad='trailing'),-1,8),
+            ('bad-checksum',dict(bad='checksum'),-1,9),
+            ('unsupported-encoding',dict(control=0x4d),-1,9),
+            ('unsupported-check',dict(control=0x31),-1,9),
+            ('old-incorrect-layout',dict(bad='old-layout'),-1,8),
+            ('over-limit',dict(payload=bytes(985)),-1,8),
+        ]:
+            v19_cases.append(dict(name=name,ciphertext=session_encrypt(v19_packet(**args)),kind=kind,
+                                  failure=failure,telemetry=telemetry.hex() if kind==3 else ''))
         vectors.append({'name':label,'local_private':local.to_bytes(21,'big').hex(),'peer_public':peer_public[-40:].hex(),'shared_secret':secret.hex(),
                         'valid_info':encrypt(bytes(range(18))),'wrong_length_info':encrypt(bytes(range(17))),
                         'invalid_padding_info':encrypt(bytes(32),True),'invalid_seed_info':encrypt(info[:16]+b'\xff\0'),'session_key':session_key,
-                        'status_request':session_encrypt(packet(src=0x21,dst=0x35,payload=b'')), 'status_cases':status_cases})
+                        'status_request':session_encrypt(packet(src=0x21,dst=0x35,payload=b'')), 'status_cases':status_cases,
+                        'display_request':display_request,'access_cases':access_cases,
+                        'credential_request':credential_request,'credential_cases':credential_cases,'v19_cases':v19_cases})
 out=Path(__file__).resolve().parents[1]/'SomnoireTests'/'ProbeVectors.json'
 out.write_text(json.dumps({'provenance':'Public synthetic values generated independently with OpenSSL; no device or capture material.', 'vectors':vectors},indent=2)+'\n')
 print('Generated two synthetic ECDH/AES vector sets, including a leading-zero shared secret.')

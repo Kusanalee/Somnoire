@@ -14,12 +14,45 @@ struct SNProbeCrypto {
     uint8_t key[16];
     uint8_t iv[16];
     int ready;
+    int credential_check_sent;
+    int credential_authenticated;
 };
+struct SNProbeCredential { uint8_t token[32]; };
 #ifdef DEBUG
 static int force_rng_failure;
 void sn_probe_test_rng_failure(int fail) { force_rng_failure = fail; }
 #endif
 static void wipe(void *memory, size_t size) { (void)memset_s(memory, size, 0, size); }
+SNProbeCredential *sn_probe_credential_create(const uint8_t *user_id, size_t user_id_length,
+    const uint8_t *serial, size_t serial_length) {
+    if (!user_id || !user_id_length || user_id_length > 32 || !serial || serial_length != 16 ||
+        memcmp(serial, "P512", 4)) return NULL;
+    for (size_t i = 0; i < user_id_length; ++i)
+        if (user_id[i] < '0' || user_id[i] > '9') return NULL;
+    for (size_t i = 0; i < serial_length; ++i)
+        if (!((serial[i] >= '0' && serial[i] <= '9') || (serial[i] >= 'A' && serial[i] <= 'Z'))) return NULL;
+    SNProbeCredential *credential = calloc(1, sizeof(*credential));
+    if (!credential) return NULL;
+    uint8_t digest[CC_MD5_DIGEST_LENGTH] = {0};
+    CC_MD5_CTX md5;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    CC_MD5_Init(&md5);
+    CC_MD5_Update(&md5, user_id, (CC_LONG)user_id_length);
+    CC_MD5_Update(&md5, serial, (CC_LONG)serial_length);
+    CC_MD5_Final(digest, &md5);
+#pragma clang diagnostic pop
+    static const char hex[] = "0123456789ABCDEF";
+    for (size_t i = 0; i < sizeof(digest); ++i) {
+        credential->token[2*i] = hex[digest[i] >> 4];
+        credential->token[2*i+1] = hex[digest[i] & 15];
+    }
+    wipe(digest, sizeof(digest)); wipe(&md5, sizeof(md5));
+    return credential;
+}
+void sn_probe_credential_destroy(SNProbeCredential *credential) {
+    if (credential) { wipe(credential, sizeof(*credential)); free(credential); }
+}
 static int secure_random(uint8_t *dest, unsigned size) {
 #ifdef DEBUG
     if (force_rng_failure) return 0;
@@ -29,6 +62,22 @@ static int secure_random(uint8_t *dest, unsigned size) {
 static void initialize(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{ uECC_set_rng(secure_random); });
+}
+// Explicit PKCS#7 validation also rejects a zero padding count. Do not rely
+// on the platform's legacy padding tolerance to establish packet validity.
+static int decrypt_cbc_strict(SNProbeCrypto *c, const uint8_t *ciphertext, size_t length,
+    uint8_t *plaintext, size_t capacity, size_t *written) {
+    *written = 0;
+    size_t count = 0;
+    CCCryptorStatus status = CCCrypt(kCCDecrypt, kCCAlgorithmAES, 0,
+        c->key, sizeof(c->key), c->iv, ciphertext, length, plaintext, capacity, &count);
+    if (status != kCCSuccess || !count || count != length) return 0;
+    uint8_t padding = plaintext[count - 1], mismatch = 0;
+    if (!padding || padding > 16 || padding > count) return 0;
+    for (size_t i = count - padding; i < count; ++i) mismatch |= plaintext[i] ^ padding;
+    if (mismatch) return 0;
+    *written = count - padding;
+    return 1;
 }
 SNProbeCrypto *sn_probe_create(uint8_t public_key[40]) {
     initialize();
@@ -60,10 +109,7 @@ int sn_probe_validate_info(SNProbeCrypto *c, const uint8_t *ciphertext, size_t l
     if (!c || c->ready != 1 || !ciphertext || length != 32) return 0;
     uint8_t plaintext[32] = {0};
     size_t written = 0;
-    CCCryptorStatus status = CCCrypt(kCCDecrypt, kCCAlgorithmAES, kCCOptionPKCS7Padding,
-        c->key, sizeof(c->key), c->iv, ciphertext, length,
-        plaintext, sizeof(plaintext), &written);
-    int valid = status == kCCSuccess && written == 18;
+    int valid = decrypt_cbc_strict(c, ciphertext, length, plaintext, sizeof(plaintext), &written) && written == 18;
     wipe(plaintext, sizeof(plaintext));
     return valid;
 }
@@ -88,9 +134,8 @@ int sn_probe_derive_session(SNProbeCrypto *c, const uint8_t *ciphertext, size_t 
     if (!valid) return 0;
     uint8_t plaintext[32] = {0}, material[32] = {0};
     size_t written = 0, offset = 0;
-    CCCryptorStatus status = CCCrypt(kCCDecrypt, kCCAlgorithmAES, kCCOptionPKCS7Padding,
-        c->key, sizeof(c->key), c->iv, ciphertext, length, plaintext, sizeof(plaintext), &written);
-    valid = status == kCCSuccess && written == 18 && table_offset(plaintext[16], plaintext[17], &offset);
+    valid = decrypt_cbc_strict(c, ciphertext, length, plaintext, sizeof(plaintext), &written) &&
+        written == 18 && table_offset(plaintext[16], plaintext[17], &offset);
     if (valid) {
         memcpy(material, table + offset, 16);
         memcpy(material + 16, plaintext, 16);
@@ -119,6 +164,24 @@ static uint8_t crc8(const uint8_t *data, size_t length) {
     }
     return crc;
 }
+int sn_probe_credential_request(SNProbeCrypto *c, SNProbeCredential *credential, uint8_t ciphertext[64]) {
+    if (!ciphertext) return 0;
+    wipe(ciphertext, 64);
+    if (!c || c->ready != 2 || c->credential_check_sent || !credential) return 0;
+    uint8_t packet[52] = {0xaa, 3, 32, 0, 0, 0x0d, 2, 0, 0, 0, 0, 0,
+        0x21, 0x35, 1, 1, 0x35, 0x86};
+    memcpy(packet + 18, credential->token, 32);
+    packet[4] = crc8(packet, 4);
+    uint16_t checksum = crc16(packet, 50);
+    packet[50] = checksum & 255; packet[51] = checksum >> 8;
+    size_t written = 0;
+    CCCryptorStatus status = CCCrypt(kCCEncrypt, kCCAlgorithmAES, kCCOptionPKCS7Padding,
+        c->key, sizeof(c->key), c->iv, packet, sizeof(packet), ciphertext, 64, &written);
+    wipe(packet, sizeof(packet));
+    if (status != kCCSuccess || written != 64) { wipe(ciphertext, 64); return 0; }
+    c->credential_check_sent = 1;
+    return 1;
+}
 int sn_probe_status_request(SNProbeCrypto *c, uint8_t ciphertext[32]) {
     if (!c || c->ready != 2 || !ciphertext) return 0;
     uint8_t packet[20] = {0xaa, 3, 0, 0, 0, 0x0d, 0, 0, 0, 0, 0, 0, 0x21, 0x35, 1, 1, 0x35, 0x89, 0, 0};
@@ -132,23 +195,158 @@ int sn_probe_status_request(SNProbeCrypto *c, uint8_t ciphertext[32]) {
     if (status != kCCSuccess || written != 32) { wipe(ciphertext, 32); return 0; }
     return 1;
 }
-int sn_probe_status_reply(SNProbeCrypto *c, const uint8_t *ciphertext, size_t length) {
-    if (!c || c->ready != 2 || !ciphertext || !length || length % 16 || length > 1008) return -1;
-    uint8_t packet[1024] = {0};
+static int decrypt_packet(SNProbeCrypto *c, const uint8_t *ciphertext, size_t length,
+    uint8_t packet[1024], size_t *written, uint8_t *failure, int allow_v19) {
+    if (failure) *failure = 1;
+    if (!c || c->ready != 2 || !ciphertext || !length || length % 16 || length > 1008) return 0;
+    if (!decrypt_cbc_strict(c, ciphertext, length, packet, 1024, written)) return 0;
+    if (failure) *failure = 2;
+    if (*written < 20 || packet[0] != 0xaa) return 0;
+    if (failure) *failure = 3;
+    if (crc8(packet, 4) != packet[4]) return 0;
+    if (packet[1] == 0x13 && allow_v19) {
+        // Installed official app: getV3Data (0x99470) counts payload + 20;
+        // process (0x9bcdc) XORs payload only for enc_type=1, using seq[0].
+        // getV3Data separates encoding bits 5...6 and check bits 2...4.
+        size_t declared = (size_t)packet[2] + ((size_t)packet[3] << 8);
+        if (failure) *failure = 8;
+        if (declared > 984 || *written != 20 + declared) return 0;
+        if (failure) *failure = 9;
+        unsigned encoding = (packet[5] >> 5) & 3;
+        unsigned check = (packet[5] >> 2) & 7;
+        uint16_t trailer = (uint16_t)packet[*written - 2] | ((uint16_t)packet[*written - 1] << 8);
+        if (encoding > 1 || check > 3) return 0;
+        // App accepts no-check modes 0/1; mode 2 accepts CRC8 or CRC16;
+        // mode 3 requires CRC16. Never infer integrity from a BB sentinel.
+        if (check == 3 && crc16(packet, *written - 2) != trailer) return 0;
+        if (check == 2 && crc8(packet, *written - 2) != trailer &&
+            crc16(packet, *written - 2) != trailer) return 0;
+        if (encoding == 1)
+            for (size_t i = 18; i < 18 + declared; ++i) packet[i] ^= packet[6];
+        if (failure) *failure = 0;
+        return 1;
+    }
+    if (failure) *failure = packet[1] == 0x13 ? 5 : 4;
+    if (packet[1] != 3) return 0;
+    if (failure) *failure = 6;
+    if (*written != 20 + (size_t)packet[2] + ((size_t)packet[3] << 8)) return 0;
+    if (failure) *failure = 7;
+    if (crc16(packet, *written - 2) != ((uint16_t)packet[*written - 2] | ((uint16_t)packet[*written - 1] << 8))) return 0;
+    if (failure) *failure = 0;
+    return 1;
+}
+static void packet_metadata(const uint8_t *packet, size_t written, SNSessionPacketMetadata *m) {
+    m->version = packet[1];
+    m->source = packet[12]; m->destination = packet[13];
+    m->device_source = packet[14]; m->device_destination = packet[15];
+    m->command_set = packet[16]; m->command = packet[17];
+    m->sequence = (uint32_t)packet[6] | ((uint32_t)packet[7] << 8) |
+        ((uint32_t)packet[8] << 16) | ((uint32_t)packet[9] << 24);
+    m->payload_length = written - 20;
+}
+static int status_route(const SNSessionPacketMetadata *m) {
+    return m->source == 0x35 && m->destination == 0x21 &&
+        m->device_source == 1 && m->device_destination == 1 &&
+        m->command_set == 0x35 && m->command == 0x89 && m->sequence == 0;
+}
+int sn_probe_inspect_packet(SNProbeCrypto *c, const uint8_t *ciphertext, size_t length,
+    SNSessionPacketMetadata *metadata) {
+    if (!metadata) return -1;
+    memset(metadata, 0, sizeof(*metadata));
+    uint8_t packet[1024] = {0}; size_t written = 0;
+    int valid = decrypt_packet(c, ciphertext, length, packet, &written, NULL, 0);
+    if (valid) packet_metadata(packet, written, metadata);
+    wipe(packet, sizeof(packet));
+    return valid ? 1 : -1;
+}
+int sn_probe_display_request(SNProbeCrypto *c, uint8_t ciphertext[32]) {
+    if (!ciphertext) return 0;
+    wipe(ciphertext, 32);
+    if (!c || c->ready != 2) return 0;
+    // Request a full display report, without setting any cfg_* or auth field.
+    uint8_t packet[23] = {0xaa, 3, 3, 0, 0, 0x0d, 1, 0, 0, 0, 0, 0,
+        0x21, 2, 1, 1, 0xfe, 0x11, 0xb8, 4, 1, 0, 0};
+    packet[4] = crc8(packet, 4);
+    uint16_t checksum = crc16(packet, 21);
+    packet[21] = checksum & 255; packet[22] = checksum >> 8;
     size_t written = 0;
-    CCCryptorStatus status = CCCrypt(kCCDecrypt, kCCAlgorithmAES, kCCOptionPKCS7Padding,
-        c->key, sizeof(c->key), c->iv, ciphertext, length, packet, sizeof(packet), &written);
-    int result = -1;
-    if (status == kCCSuccess && written >= 20 && packet[0] == 0xaa && packet[1] == 3 &&
-        written == 20 + (size_t)packet[2] + ((size_t)packet[3] << 8) &&
-        crc8(packet, 4) == packet[4] &&
-        crc16(packet, written - 2) == ((uint16_t)packet[written - 2] | ((uint16_t)packet[written - 1] << 8))) {
-        result = packet[12] == 0x35 && packet[13] == 0x21 && packet[14] == 1 && packet[15] == 1 &&
-            packet[16] == 0x35 && packet[17] == 0x89 &&
-            packet[6] == 0 && packet[7] == 0 && packet[8] == 0 && packet[9] == 0 ? 1 : 0;
+    CCCryptorStatus status = CCCrypt(kCCEncrypt, kCCAlgorithmAES, kCCOptionPKCS7Padding,
+        c->key, sizeof(c->key), c->iv, packet, sizeof(packet), ciphertext, 32, &written);
+    wipe(packet, sizeof(packet));
+    if (status != kCCSuccess || written != 32) { wipe(ciphertext, 32); return 0; }
+    return 1;
+}
+int sn_probe_access_reply(SNProbeCrypto *c, const uint8_t *ciphertext, size_t length,
+    SNAccessReply *reply, uint8_t *telemetry, size_t capacity, size_t *telemetry_length) {
+    if (reply) memset(reply, 0, sizeof(*reply));
+    if (telemetry_length) *telemetry_length = 0;
+    if (telemetry && capacity <= 984) wipe(telemetry, capacity);
+    if (!reply || !telemetry_length || !telemetry || capacity > 984) return -1;
+    uint8_t packet[1024] = {0}; size_t written = 0;
+    int result = -1; uint8_t failure = 0;
+    // The response control byte need not equal the request's 0x0d. It is not a
+    // framing marker. V19 access frames are allowed only after credential success;
+    // status and credential replies themselves remain strictly V3.
+    if (decrypt_packet(c, ciphertext, length, packet, &written, &failure,
+        c && c->credential_authenticated)) {
+        packet_metadata(packet, written, &reply->metadata);
+        const SNSessionPacketMetadata *m = &reply->metadata;
+        result = 0;
+        if (packet[1] == 3 && status_route(m)) {
+            result = 1;
+            if (m->payload_length == 2) {
+                if (packet[18] <= 1) reply->auth_action = packet[18] == 0 ? 1 : 2;
+                if (packet[19] <= 1) reply->auth_mode = packet[19] == 0 ? 1 : 2;
+            }
+        } else if (packet[1] == 3 && c->credential_check_sent && m->source == 0x35 && m->destination == 0x21 &&
+            m->device_source == 1 && m->device_destination == 1 &&
+            m->command_set == 0x35 && m->command == 0x86 && m->sequence == 2) {
+            // App's normal helper rejects empty payloads and interprets the first
+            // result byte: zero is success, every nonzero value is rejection.
+            if (!m->payload_length) result = -1;
+            else {
+                reply->credential_accepted = packet[18] == 0;
+                c->credential_authenticated = reply->credential_accepted;
+                result = 4;
+            }
+        } else if (m->source == 2 && m->destination == 0x21 && m->command_set == 0xfe) {
+            if (m->command == 0x11 && m->sequence == 1 &&
+                m->device_source == 1 && m->device_destination == 1) result = 2;
+            else if (m->command == 0x15 &&
+                ((m->device_source == 0 && m->device_destination == 0) ||
+                 (m->device_source == 1 && m->device_destination == 1) ||
+                 // Actual 0.5.5 bank uploads, after accepted credential check.
+                 // Keep this additional route out of V3/account-free probes.
+                 (c->credential_authenticated && packet[1] == 0x13 &&
+                  m->device_source == 1 && m->device_destination == 0))) {
+                if (m->payload_length <= capacity) {
+                    memcpy(telemetry, packet + 18, m->payload_length);
+                    *telemetry_length = m->payload_length; result = 3;
+                } else result = -1;
+            }
+        }
+    }
+    uint16_t observed = 0, declared = 0; uint8_t markers = 0;
+    if (result < 0 && (failure == 8 || failure == 9)) {
+        observed = (uint16_t)written;
+        declared = (uint16_t)packet[2] | ((uint16_t)packet[3] << 8);
+        if (packet[written - 2] == 0xbb && packet[written - 1] == 0xbb) markers |= 1;
+        if ((packet[written - 2] ^ packet[6]) == 0xbb &&
+            (packet[written - 1] ^ packet[6]) == 0xbb) markers |= 2;
     }
     wipe(packet, sizeof(packet));
+    if (result < 0) {
+        memset(reply, 0, sizeof(*reply)); reply->validation_failure = failure;
+        reply->observed_inner_length = observed; reply->declared_payload_length = declared;
+        reply->v19_marker_flags = markers;
+        wipe(telemetry, capacity); *telemetry_length = 0;
+    }
     return result;
+}
+int sn_probe_status_reply(SNProbeCrypto *c, const uint8_t *ciphertext, size_t length) {
+    SNSessionPacketMetadata metadata;
+    if (sn_probe_inspect_packet(c, ciphertext, length, &metadata) != 1) return -1;
+    return status_route(&metadata) ? 1 : 0;
 }
 void sn_probe_destroy(SNProbeCrypto *c) {
     if (c) { wipe(c, sizeof(*c)); free(c); }

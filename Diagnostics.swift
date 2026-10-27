@@ -6,6 +6,11 @@ enum DiagnosticKind: String {
     case monitoringStarted = "Automatic monitoring enabled", monitoringPaused = "Automatic monitoring paused", targetSelected = "Power bank selected"
     case advertisedBattery = "Advertisement battery decoding"
     case unrelatedStatus = "Valid unrelated encrypted packet discarded"
+    case sessionPacket = "Validated encrypted packet header"
+    case authenticationStatus = "App-derived authentication status"
+    case candidateTelemetry = "Candidate telemetry body decoded"
+    case packetValidation = "Packet structure validation"
+    case probeRequested = "Probe requested"
     case probeStarted = "Probe started", probeStageChanged = "Probe stage", probeFinished = "Probe finished"
     case bluetooth = "Bluetooth state", scanStarted = "Scan started", scanStopped = "Scan stopped"
     case discovered = "Peripheral discovered", advertisement = "Advertisement updated"
@@ -17,12 +22,16 @@ enum DiagnosticKind: String {
     case notification = "Notification received", error = "Bluetooth error", sleep = "System sleep"
 }
 enum DiagnosticSeverity: String { case info, warning, error }
-enum DiagnosticCounter: String { case services, characteristics, bytes, advertisedServices, serviceDataEntries, milliseconds }
+enum DiagnosticCounter: String { case services, characteristics, bytes, advertisedServices, serviceDataEntries, milliseconds, observedPackets, telemetryPackets, portPowerUpdates }
 enum DiagnosticField: Equatable {
     case advertisedBattery(AdvertisedBatteryOutcome)
     case probeKind(ProbeKind)
     case probeStage(ProbeStage)
     case probeOutcome(ProbeOutcome)
+    case sessionPacket(SessionPacketMetadata)
+    case authenticationStatus(AuthStatusSummary)
+    case credentialAccepted(Bool)
+    case packetValidation(PacketValidationSummary)
     case availability(BluetoothAvailability)
     case uuid(String)
     case properties(UInt)
@@ -40,6 +49,13 @@ enum DiagnosticField: Equatable {
         case .probeKind(let kind): return "probe=\(kind.rawValue)"
         case .probeStage(let stage): return "stage=\(stage.rawValue)"
         case .probeOutcome(let outcome): return outcome.label
+        case .authenticationStatus(let summary): return summary.label
+        case .credentialAccepted(let accepted): return "existing credential=\(accepted ? "accepted" : "rejected")"
+        case .packetValidation(let summary): return summary.label
+        case .sessionPacket(let packet):
+            return String(format: "inner=V%u · route=%02X/%02X→%02X/%02X · command=%02X/%02X · payload bytes=%d",
+                packet.version, packet.source, packet.deviceSource, packet.destination, packet.deviceDestination,
+                packet.commandSet, packet.command, packet.payloadLength)
         case .availability(let state): return state.rawValue
         case .uuid(let uuid):
             // Accept UUID syntax only; never allow arbitrary data through this field.
@@ -97,7 +113,7 @@ struct Diagnostics {
     mutating func clear() { self = Diagnostics() }
     func export(appVersion: String, systemVersion: String, services: [GATTService], gattIsStale: Bool = false) -> String {
         // Version arguments originate in the app bundle/OS, never BLE data.
-        var lines = ["Somnoire \(appVersion) · Phase 2B", "macOS \(systemVersion)", "Privacy: names, peripheral identifiers, raw advertisements, packet payloads, battery readings and absolute timestamps excluded.", "", "Events:"]
+        var lines = ["Somnoire \(appVersion) · Phase 2E", "macOS \(systemVersion)", "Privacy: names, peripheral identifiers, raw advertisements, packet payloads, credentials, account IDs, battery and power readings, and absolute timestamps excluded.", "", "Events:"]
         lines += events.map(\.line)
         lines += ["", gattIsStale ? "Last GATT snapshot (stale / disconnected):" : "Current GATT snapshot:"]
         for service in services {
