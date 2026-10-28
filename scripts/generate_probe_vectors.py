@@ -164,12 +164,23 @@ with tempfile.TemporaryDirectory() as directory:
         ]:
             v19_cases.append(dict(name=name,ciphertext=session_encrypt(v19_packet(**args)),kind=kind,
                                   failure=failure,telemetry=telemetry.hex() if kind==3 else ''))
+        healthy_cases=[]
+        for mode,ceiling,floor,body in [(1,-1,-1,bytes.fromhex('e00b01')),(-1,80,0,bytes.fromhex('880250900200')),(2,100,20,bytes.fromhex('e00b02880264900214'))]:
+            healthy_cases.append(dict(mode=mode,ceiling=ceiling,floor=floor,ciphertext=session_encrypt(packet(src=0x21,dst=2,cmdset=0xFE,cmd=0x11,seq=3,payload=body))))
+        screen_cases=[]
+        def vint(value):
+            out=bytearray()
+            while value>=128:out.append((value&127)|128);value>>=7
+            out.append(value);return bytes(out)
+        for field,value in [(12,30),(12,3600),(14,0),(14,100),(301,1),(302,300),(304,2),(305,60),(306,1),(554,4294967295)]:
+            body=vint(field<<3)+vint(value)
+            screen_cases.append(dict(field=field,value=value,ciphertext=session_encrypt(packet(src=0x21,dst=2,cmdset=0xFE,cmd=0x11,seq=3,payload=body))))
         vectors.append({'name':label,'local_private':local.to_bytes(21,'big').hex(),'peer_public':peer_public[-40:].hex(),'shared_secret':secret.hex(),
                         'valid_info':encrypt(bytes(range(18))),'wrong_length_info':encrypt(bytes(range(17))),
                         'invalid_padding_info':encrypt(bytes(32),True),'invalid_seed_info':encrypt(info[:16]+b'\xff\0'),'session_key':session_key,
                         'status_request':session_encrypt(packet(src=0x21,dst=0x35,payload=b'')), 'status_cases':status_cases,
                         'display_request':display_request,'access_cases':access_cases,
-                        'credential_request':credential_request,'credential_cases':credential_cases,'v19_cases':v19_cases})
+                        'screen_cases':screen_cases,'healthy_cases':healthy_cases,'credential_request':credential_request,'credential_cases':credential_cases,'v19_cases':v19_cases})
 out=Path(__file__).resolve().parents[1]/'SomnoireTests'/'ProbeVectors.json'
 out.write_text(json.dumps({'provenance':'Public synthetic values generated independently with OpenSSL; no device or capture material.', 'vectors':vectors},indent=2)+'\n')
 print('Generated two synthetic ECDH/AES vector sets, including a leading-zero shared secret.')

@@ -6,6 +6,8 @@ private final class AccessFakeCrypto: ProbeCryptography {
     var validationSummary: PacketValidationSummary?
     let publicPoint = Data(repeating: 0xA1, count: 40)
     var cleared = false
+    var settingsSequences: [UInt32] = []
+    func healthyRequest(_ change: HealthyChange, sequence: UInt32) throws -> Data { settingsSequences.append(sequence); return Data(repeating: 0x55, count: 32) }
     var packet = AccessPacket(metadata: SessionPacketMetadata(source: 0x35, destination: 0x21,
         deviceSource: 1, deviceDestination: 1, commandSet: 0x35, command: 0x89, sequence: 0, payloadLength: 2),
         body: .status(AuthStatusSummary(action: .checkCredential, mode: .normal)))
@@ -35,10 +37,10 @@ private final class AccessHarness {
     let probe: KeyExchangeProbe
     var writes: [(UUID, Data)] = []
     var actions: [ProbeAction] = []
-    init(kind: ProbeKind = .accountFreeAccess) {
+    init(kind: ProbeKind = .accountFreeAccess, live: Bool = false) {
         let clock = clock, crypto = crypto
         let credential = kind == .authenticatedAccess ? ProbeCredential(userID: "123456789", serial: Data("P512000000000000".utf8)) : nil
-        probe = KeyExchangeProbe(kind: kind, credential: credential, now: { clock.time }, makeCrypto: { crypto })
+        probe = KeyExchangeProbe(kind: kind, live: live, credential: credential, now: { clock.time }, makeCrypto: { crypto })
         probe.onAction = { [weak self] in
             self?.actions.append($0)
             if case .write(let id, let bytes) = $0 { self?.writes.append((id, bytes)) }
@@ -74,6 +76,88 @@ private final class AccessHarness {
 }
 
 final class AuthenticatedAccessTests: XCTestCase {
+    @MainActor
+    func testCancelSettingsKeepsDashboardSessionAndRejectsLateAcknowledgement() {
+        let h = AccessHarness(kind: .authenticatedAccess, live: true); h.status()
+        h.probe.writeCompleted(h.writes[3].0, success: true); h.credentialReply(true)
+        h.probe.writeCompleted(h.writes[4].0, success: true)
+        var result: Bool?
+        h.probe.applyHealthy(HealthyChange(screen: [.brightness: 50])) { result = $0 }
+        let write = h.writes.last!.0, count = h.writes.count
+        h.probe.cancelSettings(); XCTAssertEqual(result, false)
+        XCTAssertTrue(h.probe.isActive)
+        h.probe.writeCompleted(write, success: true)
+        XCTAssertEqual(h.writes.count, count)
+        h.telemetry(); XCTAssertNil(h.probe.result)
+    }
+
+    @MainActor
+    func testScreenChangeUsesFreshReadbackWithoutHealthyBaseline() {
+        let h = AccessHarness(kind: .authenticatedAccess, live: true); h.status()
+        h.probe.writeCompleted(h.writes[3].0, success: true); h.credentialReply(true)
+        h.probe.writeCompleted(h.writes[4].0, success: true)
+        var result: Bool?
+        h.probe.applyHealthy(HealthyChange(screen: [.brightness: 100])) { result = $0 }
+        h.telemetry(Data([0x28,100])); XCTAssertNil(result)
+        h.probe.writeCompleted(h.writes.last!.0, success: true)
+        h.probe.writeCompleted(h.writes.last!.0, success: true)
+        h.telemetry(Data([0x28,99])); XCTAssertNil(result)
+        h.telemetry(Data([0x28,100])); XCTAssertEqual(result, true)
+    }
+
+    @MainActor
+    func testSettingsRequireAcknowledgementAndFreshReadbackAndNeverRetry() {
+        let h = AccessHarness(kind: .authenticatedAccess, live: true); h.status()
+        h.probe.writeCompleted(h.writes[3].0, success: true); h.credentialReply(true)
+        h.probe.writeCompleted(h.writes[4].0, success: true)
+        // Reported mode=1, ceiling=80, floor=0; all public synthetic varints.
+        let body = Data([0x80,0x35,1,0xf0,0x10,80,0xf8,0x10,0])
+        h.telemetry(body)
+        var result: Bool?
+        h.probe.applyHealthy(HealthyChange(ceiling: 80)) { result = $0 }
+        h.telemetry(body); XCTAssertNil(result)
+        h.probe.writeCompleted(h.writes.last!.0, success: true)
+        h.telemetry(body); XCTAssertNil(result) // Refresh write not acknowledged yet.
+        h.probe.writeCompleted(h.writes.last!.0, success: true)
+        h.telemetry(body); XCTAssertEqual(result, true)
+        XCTAssertEqual(h.crypto.settingsSequences, [3])
+        result = nil
+        h.probe.applyHealthy(HealthyChange(ceiling: 90)) { result = $0 }
+        h.probe.writeCompleted(h.writes.last!.0, success: true)
+        h.probe.writeCompleted(h.writes.last!.0, success: true)
+        h.telemetry(body); XCTAssertNil(result)
+        let count = h.writes.count
+        h.clock.time = 5; h.probe.expire(); XCTAssertEqual(result, false)
+        XCTAssertEqual(h.writes.count, count)
+        XCTAssertEqual(h.crypto.settingsSequences, [3,4])
+        result = nil
+        h.probe.applyHealthy(HealthyChange(mode: 2)) { result = $0 }
+        h.probe.cancel(); XCTAssertEqual(result, false)
+    }
+
+    @MainActor
+    func testLiveStreamExceedsDiagnosticWindowAndTimesOutOnSilence() {
+        let h = AccessHarness(kind: .authenticatedAccess, live: true); h.status()
+        h.probe.writeCompleted(h.writes[3].0, success: true); h.credentialReply(true)
+        h.probe.writeCompleted(h.writes[4].0, success: true)
+        for second in 1...90 {
+            h.clock.time = Double(second); h.telemetry(); h.probe.expire()
+            XCTAssertNil(h.probe.result)
+        }
+        h.clock.time = 105; h.probe.expire()
+        XCTAssertEqual(h.probe.result?.outcome, .failed(.stageTimeout))
+        XCTAssertTrue(h.crypto.cleared)
+    }
+
+    func testCredentialCopiesSurviveOriginalCleanup() throws {
+        let credential = try XCTUnwrap(ProbeCredential(userID: "123", serial: Data("P512000000000000".utf8)))
+        let copy = try XCTUnwrap(credential.copy())
+        credential.clear()
+        XCTAssertNotNil(copy.copy())
+        XCTAssertNil(credential.copy())
+        copy.clear(); XCTAssertNil(copy.copy())
+    }
+
     @MainActor
     func testManagerRecordsAuthenticatedIntentWithoutConnectingAnUnseenBank() {
         let defaults = UserDefaults(suiteName: "Somnoire.AuthenticatedIntent.\(UUID().uuidString)")!
@@ -112,6 +196,67 @@ final class AuthenticatedAccessTests: XCTestCase {
         let result = h.probe.result
         h.credentialReply(false); h.telemetry(); h.probe.cancel()
         XCTAssertEqual(h.probe.result, result)
+    }
+
+    @MainActor
+    func testOutOfRangeBatteryAllowsPortTelemetryAndCompletesBoundedSession() {
+        let h = AccessHarness(kind: .authenticatedAccess); h.status()
+        h.probe.writeCompleted(h.writes[3].0, success: true)
+        h.credentialReply(true)
+        let body = Data([0xb5, 0x10, 0, 0, 0xca, 0x42, 0xc2, 0x35, 5, 0x0d, 0, 0, 0x20, 0xc2])
+        h.telemetry(body) // Early body waits for the report write acknowledgement.
+        XCTAssertFalse(h.actions.contains { if case .telemetryValueUnavailable = $0 { true } else { false } })
+        h.probe.writeCompleted(h.writes[4].0, success: true)
+        h.clock.time = 30; h.probe.expire()
+        XCTAssertEqual(h.probe.result?.outcome, .authenticatedTelemetryDecoded)
+        XCTAssertEqual(h.probe.result?.access?.decodedPackets, 1)
+        XCTAssertEqual(h.probe.result?.access?.portPowerUpdates, 1)
+        XCTAssertEqual(h.probe.result?.access?.latestDelta?.ports[.usbC2]?.watts, -40)
+        XCTAssertNil(h.probe.result?.access?.latestDelta?.batteryPercentage)
+        XCTAssertTrue(h.crypto.cleared)
+        let warnings = h.actions.compactMap { action -> TelemetryValidationSummary? in
+            if case .telemetryValueUnavailable(let summary) = action { return summary }; return nil
+        }
+        XCTAssertEqual(warnings.count, 1)
+        guard let summary = warnings.first else { return }
+        var log = Diagnostics()
+        log.record(.telemetryValueUnavailable, fields: [.telemetryValidation(summary)])
+        let report = log.export(appVersion: "test", systemVersion: "test", services: [])
+        XCTAssertTrue(report.contains("Telemetry measurement unavailable"))
+        XCTAssertTrue(report.contains("reason=invalidBattery"))
+        XCTAssertTrue(report.contains("field=262"))
+        XCTAssertFalse(report.contains("101"))
+        XCTAssertFalse(report.contains("-40"))
+    }
+
+    @MainActor
+    func testRejectedTelemetryReportsStructureWithoutPartialCommit() {
+        let h = AccessHarness(kind: .authenticatedAccess); h.status()
+        h.probe.writeCompleted(h.writes[3].0, success: true)
+        h.credentialReply(true)
+        h.probe.writeCompleted(h.writes[4].0, success: true)
+        // Valid top-level input power followed by a malformed C2 nested float.
+        h.telemetry(Data([0x1d, 0, 0, 0x80, 0x3f, 0xc2, 0x35, 2, 0x0d, 0]))
+        XCTAssertEqual(h.probe.result?.outcome, .failed(.invalidTelemetry))
+        XCTAssertEqual(h.probe.result?.access?.decodedPackets, 0)
+        XCTAssertEqual(h.probe.result?.access?.portPowerUpdates, 0)
+        XCTAssertNil(h.probe.result?.access?.latestDelta)
+        XCTAssertTrue(h.crypto.cleared)
+        let summaries = h.actions.compactMap { action -> TelemetryValidationSummary? in
+            if case .telemetryValidation(let summary) = action { return summary }; return nil
+        }
+        XCTAssertEqual(summaries.count, 1)
+        guard let summary = summaries.first else { return }
+        XCTAssertEqual(summary.port, .usbC2)
+        XCTAssertEqual(summary.offset, 8)
+        var log = Diagnostics()
+        log.record(.telemetryValidation, fields: [.telemetryValidation(summary)])
+        let report = log.export(appVersion: "test", systemVersion: "test", services: [])
+        XCTAssertTrue(report.contains("location=port field 856"))
+        XCTAssertTrue(report.contains("reason=malformed"))
+        XCTAssertFalse(report.contains("1d0000803f"))
+        XCTAssertFalse(report.contains("watts="))
+        h.telemetry(); XCTAssertEqual(h.probe.result?.access?.decodedPackets, 0)
     }
 
     @MainActor
@@ -282,6 +427,10 @@ final class AuthenticatedAccessTests: XCTestCase {
         struct CredentialCase: Decodable { let name: String, ciphertext: String }
         struct Vector: Decodable {
             let local_private: String, peer_public: String, valid_info: String
+            struct HealthyCase: Decodable { let mode: Int32, ceiling: Int32, floor: Int32; let ciphertext: String }
+            struct ScreenCase: Decodable { let field: UInt32, value: UInt32; let ciphertext: String }
+            let screen_cases: [ScreenCase]
+            let healthy_cases: [HealthyCase]
             let credential_cases: [CredentialCase], v19_cases: [Case]
         }
         struct Fixture: Decodable { let vectors: [Vector] }
@@ -303,6 +452,9 @@ final class AuthenticatedAccessTests: XCTestCase {
             let info = bytes(vector.valid_info)
             XCTAssertEqual(sn_probe_derive_session(context, info, info.count, table, table.count), 1)
             var reply = SNAccessReply(), body = [UInt8](repeating: 0xCC, count: 984), length = 123
+            var refused = [UInt8](repeating: 0xcc, count: 32)
+            XCTAssertEqual(sn_probe_healthy_request(context, 3, 1, -1, -1, &refused), 0)
+            XCTAssertTrue(refused.allSatisfy { $0 == 0 })
             let display = bytes(vector.v19_cases[0].ciphertext)
             XCTAssertEqual(sn_probe_access_reply(context, display, display.count, &reply, &body, body.count, &length), -1)
             XCTAssertEqual(reply.validation_failure, 5)
@@ -320,6 +472,22 @@ final class AuthenticatedAccessTests: XCTestCase {
             let acceptance = bytes(try XCTUnwrap(vector.credential_cases.first { $0.name == "accepted" }).ciphertext)
             XCTAssertEqual(sn_probe_access_reply(context, acceptance, acceptance.count, &reply, &body, body.count, &length), 4)
             XCTAssertEqual(reply.credential_accepted, 1)
+            for item in vector.screen_cases {
+                var output = [UInt8](repeating: 0, count: 32)
+                XCTAssertEqual(sn_probe_screen_request(context, 3, item.field, item.value, &output), 1)
+                XCTAssertEqual(output, bytes(item.ciphertext))
+                XCTAssertEqual(sn_probe_screen_request(context, 3, 1, 1, &output), 0)
+                XCTAssertTrue(output.allSatisfy { $0 == 0 })
+                XCTAssertEqual(sn_probe_screen_request(context, 2, item.field, item.value, &output), 0)
+            }
+            for item in vector.healthy_cases {
+                var output = [UInt8](repeating: 0, count: 32)
+                XCTAssertEqual(sn_probe_healthy_request(context, 3, item.mode, item.ceiling, item.floor, &output), 1)
+                XCTAssertEqual(output, bytes(item.ciphertext))
+                XCTAssertEqual(sn_probe_healthy_request(context, 2, item.mode, item.ceiling, item.floor, &output), 0)
+                XCTAssertTrue(output.allSatisfy { $0 == 0 })
+                XCTAssertEqual(sn_probe_healthy_request(context, 3, 1, 79, 21, &output), 0)
+            }
             for item in vector.v19_cases {
                 let cipher = bytes(item.ciphertext)
                 let result = sn_probe_access_reply(context, cipher, cipher.count, &reply, &body, body.count, &length)

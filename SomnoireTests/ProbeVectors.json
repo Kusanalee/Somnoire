@@ -261,6 +261,78 @@
           "telemetry": ""
         }
       ],
+      "screen_cases": [
+        {
+          "field": 12,
+          "value": 30,
+          "ciphertext": "a9ac6ce216d1200971868e3089c7bc376063812a85df13f267d6d73dcfdb7272"
+        },
+        {
+          "field": 12,
+          "value": 3600,
+          "ciphertext": "6605a37d0f3233d0a59e0f5db5485db6778eced66042e27bd67c54cdc3bf044f"
+        },
+        {
+          "field": 14,
+          "value": 0,
+          "ciphertext": "a9ac6ce216d1200971868e3089c7bc37daa671f4c058b454ed7ad657041e5ac6"
+        },
+        {
+          "field": 14,
+          "value": 100,
+          "ciphertext": "a9ac6ce216d1200971868e3089c7bc3764169fcc590730736164bd918a1ffd04"
+        },
+        {
+          "field": 301,
+          "value": 1,
+          "ciphertext": "6605a37d0f3233d0a59e0f5db5485db61be4d931d014b67b1cf0af9593d95cf3"
+        },
+        {
+          "field": 302,
+          "value": 300,
+          "ciphertext": "c5cc85ff1e43e91fd15dd25b38eb6f77be6af1d2529c48a0e24ccabeb5ec9373"
+        },
+        {
+          "field": 304,
+          "value": 2,
+          "ciphertext": "6605a37d0f3233d0a59e0f5db5485db65dd532696808de31578745bc0cba76e6"
+        },
+        {
+          "field": 305,
+          "value": 60,
+          "ciphertext": "6605a37d0f3233d0a59e0f5db5485db6541397934981d42b2a1e6c3433bd4316"
+        },
+        {
+          "field": 306,
+          "value": 1,
+          "ciphertext": "6605a37d0f3233d0a59e0f5db5485db6d7c874d061f4f6d80739879fbb53e46b"
+        },
+        {
+          "field": 554,
+          "value": 4294967295,
+          "ciphertext": "fd3b7692408492350450c0d8b0cf5fbc20ff6918c77c18ec267cc55ae0a733b9"
+        }
+      ],
+      "healthy_cases": [
+        {
+          "mode": 1,
+          "ceiling": -1,
+          "floor": -1,
+          "ciphertext": "6605a37d0f3233d0a59e0f5db5485db6811a7887eda2b3a0a90f41438121b79a"
+        },
+        {
+          "mode": -1,
+          "ceiling": 80,
+          "floor": 0,
+          "ciphertext": "c1293cd1f3e666290390596e8e4b29f6ccda42df5a7af49c416b698a8a5edeae"
+        },
+        {
+          "mode": 2,
+          "ceiling": 100,
+          "floor": 20,
+          "ciphertext": "c913fba1f692ac24a32dfd9dbd3783894a3af867cfa5c6bdc031feb493603fa2"
+        }
+      ],
       "credential_request": "87036e8b65d39b5a091512e68a3576d734930ce40a86da331ab670f56604f2aa455e6af065bf6afd57314dd0f8a6072152c3182dc2a5a11f0b3545b254363dfa",
       "credential_cases": [
         {
@@ -832,6 +904,78 @@
           "action": 0,
           "mode": 0,
           "telemetry": ""
+        }
+      ],
+      "screen_cases": [
+        {
+          "field": 12,
+          "value": 30,
+          "ciphertext": "4327f5cb5d1904b3b861da2b458d7e7b1529ddba3ede02f7caf671ca1c2dbb23"
+        },
+        {
+          "field": 12,
+          "value": 3600,
+          "ciphertext": "0b1fc8b7e0804de996f191d0171f3b4458aabb27fb264f85539ea486c690c6a2"
+        },
+        {
+          "field": 14,
+          "value": 0,
+          "ciphertext": "4327f5cb5d1904b3b861da2b458d7e7bc9ec1fa802e423cc128e91ef0eff81af"
+        },
+        {
+          "field": 14,
+          "value": 100,
+          "ciphertext": "4327f5cb5d1904b3b861da2b458d7e7b0bcf3f04b64fc5313c07322c402e7ddd"
+        },
+        {
+          "field": 301,
+          "value": 1,
+          "ciphertext": "0b1fc8b7e0804de996f191d0171f3b44a651ec908e442cff410192c6dab9caa3"
+        },
+        {
+          "field": 302,
+          "value": 300,
+          "ciphertext": "fbf5d58bd45d516ed28d74a6943dca2bd03d808afaea7ba9ec264a361d34cf9d"
+        },
+        {
+          "field": 304,
+          "value": 2,
+          "ciphertext": "0b1fc8b7e0804de996f191d0171f3b443c9042047d40203416315141c1b32a52"
+        },
+        {
+          "field": 305,
+          "value": 60,
+          "ciphertext": "0b1fc8b7e0804de996f191d0171f3b4420f2b7b09a1b2d38a9e2e2831542bfa0"
+        },
+        {
+          "field": 306,
+          "value": 1,
+          "ciphertext": "0b1fc8b7e0804de996f191d0171f3b44c633458e4320ff608c390135ea59b3ba"
+        },
+        {
+          "field": 554,
+          "value": 4294967295,
+          "ciphertext": "b4f54ee3962777716b5f80a9f64caa80a7bb564a9ee040a53dbf006e62369a76"
+        }
+      ],
+      "healthy_cases": [
+        {
+          "mode": 1,
+          "ceiling": -1,
+          "floor": -1,
+          "ciphertext": "0b1fc8b7e0804de996f191d0171f3b448592bfd84d4e168d767479ca51990c44"
+        },
+        {
+          "mode": -1,
+          "ceiling": 80,
+          "floor": 0,
+          "ciphertext": "8e74d790c987c1972387f49a3f509b48087e415144ffe163b748f15b4d656d57"
+        },
+        {
+          "mode": 2,
+          "ceiling": 100,
+          "floor": 20,
+          "ciphertext": "607ab33271b8eb82202b631c01c76abc69b4533e6dca0f73de1944d1e014cceb"
         }
       ],
       "credential_request": "acb73416ea37960f400de5934ba8a48f23bd28ec183598de6ccedeaec94df73e56fd3e1b96a170579b93323b66180252e3c189e55c4b18cdef9fdd7b93969c62",

@@ -8,7 +8,10 @@ enum DiagnosticKind: String {
     case unrelatedStatus = "Valid unrelated encrypted packet discarded"
     case sessionPacket = "Validated encrypted packet header"
     case authenticationStatus = "App-derived authentication status"
+    case batteryFields = "Battery information fields present"
     case candidateTelemetry = "Candidate telemetry body decoded"
+    case telemetryValueUnavailable = "Telemetry measurement unavailable"
+    case telemetryValidation = "Telemetry payload validation"
     case packetValidation = "Packet structure validation"
     case probeRequested = "Probe requested"
     case probeStarted = "Probe started", probeStageChanged = "Probe stage", probeFinished = "Probe finished"
@@ -31,6 +34,8 @@ enum DiagnosticField: Equatable {
     case sessionPacket(SessionPacketMetadata)
     case authenticationStatus(AuthStatusSummary)
     case credentialAccepted(Bool)
+    case batteryFields([UInt16])
+    case telemetryValidation(TelemetryValidationSummary)
     case packetValidation(PacketValidationSummary)
     case availability(BluetoothAvailability)
     case uuid(String)
@@ -50,7 +55,9 @@ enum DiagnosticField: Equatable {
         case .probeStage(let stage): return "stage=\(stage.rawValue)"
         case .probeOutcome(let outcome): return outcome.label
         case .authenticationStatus(let summary): return summary.label
+        case .batteryFields(let fields): return "fields=" + fields.filter { [263, 1251, 102, 1275, 1274].contains($0) }.map(String.init).joined(separator: ",")
         case .credentialAccepted(let accepted): return "existing credential=\(accepted ? "accepted" : "rejected")"
+        case .telemetryValidation(let summary): return summary.label
         case .packetValidation(let summary): return summary.label
         case .sessionPacket(let packet):
             return String(format: "inner=V%u · route=%02X/%02X→%02X/%02X · command=%02X/%02X · payload bytes=%d",

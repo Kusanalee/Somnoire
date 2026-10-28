@@ -5,6 +5,168 @@ import CoreBluetooth
 /// Ordinary connections inspect GATT only. Explicit probes have a bounded write path.
 @MainActor
 final class BluetoothManager: NSObject, ObservableObject {
+    @Published private(set) var panePhases: [SettingsPane: PanePhase] = [:]
+    private var transactionPane: SettingsPane?
+    private var transactionGeneration = 0
+    private var transactionConfirmed = 0
+    var settingsBusy: Bool { transactionPane != nil || settingsStatus == .applying }
+    func applyChargingPane(_ draft: HealthySettings, baseline: HealthySettings) {
+        guard !settingsBusy else { return }
+        transactionConfirmed = 0; transactionPane = .charging; panePhases[.charging] = .applying
+        applyHealthy(draft, baseline: baseline)
+        updatePaneResult()
+    }
+    private func updatePaneResult() {
+        guard let pane = transactionPane else { return }
+        switch settingsStatus {
+        case .applied: panePhases[pane] = .applied; transactionPane = nil
+        case .partial: panePhases[pane] = .partial; transactionPane = nil
+        case .notConfirmed: panePhases[pane] = .notConfirmed; transactionPane = nil
+        default: break
+        }
+    }
+    func applyScreenPane(_ draft: [ScreenField: UInt32], baseline: [ScreenField: UInt32]) {
+        guard !settingsBusy, canEditScreen else { return }
+        let changes = ScreenField.allCases.filter { draft[$0] != baseline[$0] && draft[$0] != nil }
+        guard !changes.isEmpty, changes.allSatisfy({ screenSettings[$0] == baseline[$0] && baseline[$0].map($0.accepts) == true && draft[$0].map($0.accepts) == true }) else {
+            panePhases[.screen] = .conflict; return
+        }
+        transactionConfirmed = 0; transactionPane = .screen; panePhases[.screen] = .applying; transactionGeneration += 1
+        applyNextScreen(changes, draft: draft, baseline: baseline, confirmed: 0, generation: transactionGeneration)
+    }
+    private func applyNextScreen(_ fields: [ScreenField], draft: [ScreenField: UInt32], baseline: [ScreenField: UInt32], confirmed: Int, generation: Int) {
+        guard generation == transactionGeneration, transactionPane == .screen else { return }
+        transactionConfirmed = confirmed
+        guard let field = fields.first else {
+            let changed = draft.filter { baseline[$0.key] != $0.value }
+            settingsStatus = changed.allSatisfy { screenSettings[$0.key] == $0.value } ? .applied : .partial
+            return
+        }
+        guard liveOwner, panelVisible, screenSettings[field] == baseline[field], let probe, let value = draft[field] else {
+            settingsStatus = confirmed > 0 ? .partial : .notConfirmed; return
+        }
+        settingsStatus = .applying
+        probe.applyHealthy(HealthyChange(screen: [field: value])) { [weak self] success in
+            guard let self, self.transactionGeneration == generation, self.transactionPane == .screen else { return }
+            if success { self.applyNextScreen(Array(fields.dropFirst()), draft: draft, baseline: baseline, confirmed: confirmed+1, generation: generation) }
+            else { self.settingsStatus = confirmed > 0 ? .partial : .notConfirmed }
+        }
+    }
+    func cancelSettingsPane() {
+        transactionGeneration += 1
+        if let pane = transactionPane { panePhases[pane] = transactionConfirmed > 0 ? .partial : .notConfirmed }
+        transactionPane = nil
+        probe?.cancelSettings()
+        if settingsStatus == .applying { settingsStatus = .notConfirmed }
+    }
+    @Published private(set) var screenSettings: [ScreenField: UInt32] = [:]
+    private var dashboardVisible = false
+    private var settingsVisible = false
+    func settingsVisibility(_ visible: Bool) { if !visible { cancelSettingsPane() }; settingsVisible = visible; updateSurfaceOwnership() }
+    private func updateSurfaceOwnership() {
+        let visible = dashboardVisible || settingsVisible
+        guard panelVisible != visible else { return }
+        panelVisible = visible
+        if visible { automaticAttempted = false; attemptVisibleConnection() }
+        else if liveOwner { disconnect(); liveReadings = [:] }
+    }
+    var canEditScreen: Bool { liveOwner && liveStatus == .live && (settingsStatus == .idle || settingsStatus == .applied) }
+    func applyScreen(_ field: ScreenField, value: UInt32, baseline: UInt32) {
+        guard canEditScreen, screenSettings[field] == baseline, field.accepts(baseline), field.accepts(value), value != baseline, let probe else { settingsStatus = .notConfirmed; return }
+        settingsStatus = .applying
+        probe.applyHealthy(HealthyChange(screen: [field: value])) { [weak self] success in self?.settingsStatus = success ? .applied : .notConfirmed }
+    }
+    @Published private(set) var healthySettings = HealthySettings()
+    enum SettingsStatus: Equatable { case idle, applying, applied, notConfirmed, partial }
+    @Published private(set) var settingsStatus: SettingsStatus = .idle { didSet { updatePaneResult() } }
+    var canEditHealthy: Bool { liveOwner && liveStatus == .live && healthySettings.valid && (settingsStatus == .idle || settingsStatus == .applied) }
+    func applyHealthy(_ draft: HealthySettings, baseline: HealthySettings) {
+        guard canEditHealthy, baseline == healthySettings, draft.valid, let probe else { settingsStatus = .notConfirmed; return }
+        let limits = HealthyChange(ceiling: draft.ceiling != baseline.ceiling ? draft.ceiling : nil, floor: draft.floor != baseline.floor ? draft.floor : nil)
+        settingsStatus = .applying
+        func applyLimits(modeChanged: Bool) {
+            guard self.liveOwner, self.panelVisible, let probe = self.probe else { self.settingsStatus = modeChanged ? .partial : .notConfirmed; return }
+            guard limits.valid, draft.mode == 1 else { self.settingsStatus = .applied; return }
+            probe.applyHealthy(limits) { [weak self] success in self?.settingsStatus = success ? .applied : modeChanged ? .partial : .notConfirmed }
+        }
+        if draft.mode != baseline.mode {
+            probe.applyHealthy(HealthyChange(mode: draft.mode)) { [weak self] success in
+                guard let self else { return }
+                if success { self.transactionConfirmed += 1; applyLimits(modeChanged: true) } else { self.settingsStatus = .notConfirmed }
+            }
+        } else { applyLimits(modeChanged: false) }
+    }
+    @Published private(set) var batteryInformation = BatteryInformation()
+    @Published private(set) var liveReadings: [P512ProtocolPort: [String: LiveValue]] = [:]
+    enum LiveStatus: Equatable {
+        case closed, needsBank, needsCredential, connecting, live, ended(ProbeOutcome)
+        var label: String {
+            switch self {
+            case .closed: return "Disconnected"
+            case .needsBank: return "Bank unavailable"
+            case .needsCredential: return "Needs setup"
+            case .connecting: return "Connecting…"
+            case .live: return "Connected"
+            case .ended: return "Bank unavailable — Retry to connect"
+            }
+        }
+    }
+    @Published private(set) var liveStatus: LiveStatus = .closed
+    private var panelVisible = false
+    private var liveOwner = false
+    private let credentialStore: any BankCredentialStore
+    private var cachedCredential: ProbeCredential?
+    private var credentialBank: UUID?
+    private var automaticAttempted = false
+    enum OnboardingState: Equatable { case chooseBank, establishAccess, connecting, ready }
+    var onboardingState: OnboardingState {
+        if selectedTargetID == nil { return .chooseBank }
+        if liveStatus == .live { return .ready }
+        if isProbing { return .connecting }
+        return .establishAccess
+    }
+    private func attemptVisibleConnection() {
+        guard panelVisible, !automaticAttempted, connection.isIdle,
+              let id = selectedTargetID, devices.contains(where: { $0.id == id }) else { return }
+        automaticAttempted = true; startLive()
+    }
+    struct LiveValue {
+        let value: Float
+        let time: Date
+        func fresh(at date: Date) -> Float? { date.timeIntervalSince(time) < 5 ? value : nil }
+    }
+    var hasLiveCredential: Bool { cachedCredential != nil }
+    func panelVisibility(_ visible: Bool) { dashboardVisible = visible; updateSurfaceOwnership() }
+    func clearLiveCredential() {
+        cachedCredential?.clear(); cachedCredential = nil; credentialBank = nil
+        panePhases = [:]
+        screenSettings = [:]; healthySettings = HealthySettings(); settingsStatus = .idle
+        liveReadings = [:]; batteryInformation = BatteryInformation()
+        if liveOwner { disconnect() }
+    }
+    func startLive(userID: String? = nil) {
+        guard panelVisible, connection.isIdle, let id = selectedTargetID,
+              let device = devices.first(where: { $0.id == id }), canConnect(device),
+              device.advertisement.supportsKeyExchangeProbe else {
+            liveStatus = .needsBank; return
+        }
+        if credentialBank != id { clearLiveCredential() }
+        if let userID, let bytes = device.advertisement.manufacturerData {
+            cachedCredential?.clear()
+            cachedCredential = ProbeCredential(userID: userID, serial: bytes.subdata(in: 3..<19))
+            credentialBank = cachedCredential == nil ? nil : id
+        }
+        if cachedCredential == nil {
+            cachedCredential = credentialStore.load(bank: id)
+            credentialBank = cachedCredential == nil ? nil : id
+        }
+        guard let credential = cachedCredential else { liveStatus = .needsCredential; return }
+        panePhases = [:]
+        screenSettings = [:]; healthySettings = HealthySettings(); settingsStatus = .idle
+        liveOwner = true; liveReadings = [:]; liveStatus = .connecting
+        pendingCredential = credential.copy(); requestedProbeKind = .authenticatedAccess
+        connect(to: id, probe: true)
+    }
     @Published private(set) var availability: BluetoothAvailability = .notStarted
     @Published private(set) var isScanning = false
     @Published private(set) var scanRequested = false
@@ -68,7 +230,8 @@ final class BluetoothManager: NSObject, ObservableObject {
     private var sleepObserver: AnyCancellable?
     private var wakeObserver: AnyCancellable?
 
-    init(preferences: UserDefaults = .standard, now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+    init(preferences: UserDefaults = .standard, credentialStore: any BankCredentialStore = KeychainBankCredentialStore(), now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+        self.credentialStore = credentialStore
         self.preferences = preferences; self.now = now
         monitor = MonitoringState(enabled: preferences.bool(forKey: "monitoringEnabled"),
             targetID: preferences.string(forKey: "selectedPeripheral").flatMap(UUID.init(uuidString:)))
@@ -105,15 +268,23 @@ final class BluetoothManager: NSObject, ObservableObject {
         if monitor.enabled { reconcileScanning() } else { startScan() }
     }
     func selectPowerBank(_ id: UUID) {
+        if id != selectedTargetID { clearLiveCredential() }
         guard monitor.select(id, now: now()) else { notice = "Power bank is no longer nearby. Discover devices again."; return }
         preferences.set(id.uuidString, forKey: "selectedPeripheral")
+        startMonitoring()
         diagnostics.record(.targetSelected); publishMonitoring(); armMaintenance()
     }
     func forgetPowerBank() {
+        if let bank = selectedTargetID, !credentialStore.forget(bank: bank) {
+            notice = "Could not remove the saved credential. Try Forget again."; return
+        }
+        preferences.set(false, forKey: "onboardingComplete")
+        clearLiveCredential()
         monitor.forget(); preferences.removeObject(forKey: "selectedPeripheral")
         batteryOutcomes.clear(); publishMonitoring(); reconcileScanning()
     }
     func diagnosticsClosed() {
+        if liveOwner { return }
         monitor.endChoosing()
         scanRequested = false
         if !connection.isIdle { disconnect() } else { reconcileScanning() }
@@ -124,13 +295,14 @@ final class BluetoothManager: NSObject, ObservableObject {
         if !connection.isIdle { disconnect() }
         reconcileScanning()
     }
-    func systemWake() { asleep = false; reconcileScanning() }
+    func systemWake() { asleep = false; automaticAttempted = false; reconcileScanning(); attemptVisibleConnection() }
 
     private func publishMonitoring() {
         publicationTask?.cancel(); publicationTask = nil
         monitoring = monitor.presentation(now: now(), availability: availability, asleep: asleep,
             diagnosticBusy: scanRequested || !connection.isIdle)
         if scanMode == .monitoring { devices = monitoring.candidates }
+        attemptVisibleConnection()
         publicationGate.published(now: now())
     }
     private func queuePublication() {
@@ -344,6 +516,7 @@ final class BluetoothManager: NSObject, ObservableObject {
     }
 
     func shutdown() {
+        clearLiveCredential()
         shuttingDown = true; activated = false; scanRequested = false; stopPhysicalScan()
         publicationTask?.cancel(); publicationTask = nil
         maintenanceTask?.cancel(); maintenanceTask = nil; maintenanceDeadline = nil
@@ -429,8 +602,25 @@ final class BluetoothManager: NSObject, ObservableObject {
     }
 
     private func startProbe() {
-        let session = KeyExchangeProbe(kind: requestedProbeKind, credential: pendingCredential)
+        let session = KeyExchangeProbe(kind: requestedProbeKind, live: liveOwner, credential: pendingCredential)
         pendingCredential = nil
+        session.onTelemetry = { [weak self] delta in
+            guard let self, self.liveOwner, self.panelVisible else { return }
+            self.screenSettings.merge(delta.screen) { _, new in new }
+            self.healthySettings.receive(P512TelemetryDelta(healthyMode: delta.healthyMode, chargeCeiling: delta.chargeCeiling, dischargeFloor: delta.dischargeFloor))
+            self.batteryInformation.receive(delta, at: Date())
+            if self.liveStatus != .live, let bank = self.credentialBank {
+                if self.cachedCredential.map({ self.credentialStore.save($0, bank: bank) }) == true {
+                    self.preferences.set(true, forKey: "onboardingComplete")
+                } else { self.notice = "Connected, but the credential could not be saved. Setup will be needed after Quit." }
+            }
+            self.liveStatus = .live
+            for (port, measurement) in delta.ports {
+                for (key, value) in [("W", measurement.watts), ("V", measurement.volts), ("A", measurement.amps)] {
+                    if let value { self.liveReadings[port, default: [:]][key] = LiveValue(value: value, time: Date()) }
+                }
+            }
+        }
         probe = session
         session.onChange = { [weak self, weak session] in
             guard let self, let session, self.probe === session else { return }
@@ -490,8 +680,14 @@ final class BluetoothManager: NSObject, ObservableObject {
             diagnostics.record(.sessionPacket, peripheral: connection.identifier, fields: [.sessionPacket(packet)])
         case .authenticationStatus(let summary):
             diagnostics.record(.authenticationStatus, peripheral: connection.identifier, fields: [.authenticationStatus(summary)])
+        case .batteryFields(let fields):
+            diagnostics.record(.batteryFields, peripheral: connection.identifier, fields: [.batteryFields(fields)])
         case .decodedTelemetry:
             diagnostics.record(.candidateTelemetry, peripheral: connection.identifier)
+        case .telemetryValueUnavailable(let summary):
+            diagnostics.record(.telemetryValueUnavailable, severity: .warning, peripheral: connection.identifier, fields: [.telemetryValidation(summary)])
+        case .telemetryValidation(let summary):
+            diagnostics.record(.telemetryValidation, severity: .warning, peripheral: connection.identifier, fields: [.telemetryValidation(summary)])
         case .packetValidation(let summary):
             diagnostics.record(.packetValidation, peripheral: connection.identifier, fields: [.packetValidation(summary)])
         case .finished(let result): completeProbe(result)
@@ -514,7 +710,11 @@ final class BluetoothManager: NSObject, ObservableObject {
                 diagnostics.record(.authenticationStatus, fields: [.credentialAccepted(accepted)])
             }
         }
-        pendingCredential?.clear(); pendingCredential = nil
+        if liveOwner {
+            liveStatus = .ended(result.outcome); liveReadings = [:]; batteryInformation.disconnect()
+            if result.outcome == .failed(.credentialRejected) { if let bank = credentialBank { _ = credentialStore.forget(bank: bank) }; preferences.set(false, forKey: "onboardingComplete"); cachedCredential?.clear(); cachedCredential = nil; credentialBank = nil }
+        } else { pendingCredential?.clear() }
+        pendingCredential = nil; liveOwner = false
         probeTimer?.cancel(); probeTimer = nil
         probe = nil; probeRequested = false
         probeWrite = nil; probeNotify = nil; pendingProbeWriteID = nil

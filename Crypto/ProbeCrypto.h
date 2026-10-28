@@ -7,6 +7,7 @@ typedef struct SNProbeCrypto SNProbeCrypto;
 typedef struct SNProbeCredential SNProbeCredential;
 SNProbeCredential *sn_probe_credential_create(const uint8_t *user_id, size_t user_id_length,
     const uint8_t *serial, size_t serial_length);
+SNProbeCredential *sn_probe_credential_clone(const SNProbeCredential *credential);
 void sn_probe_credential_destroy(SNProbeCredential *credential);
 // Fixed 35/86 existing-credential check, sequence 2, 32 ASCII uppercase hex bytes.
 int sn_probe_credential_request(SNProbeCrypto *context, SNProbeCredential *credential,
@@ -31,6 +32,8 @@ int sn_probe_inspect_packet(SNProbeCrypto *context, const uint8_t *ciphertext, s
     SNSessionPacketMetadata *metadata);
 // Fixed one-shot display report request: FE/11, only protobuf field 71=true.
 // This display API accepts no caller-supplied command, settings or authentication payload.
+int sn_probe_screen_request(SNProbeCrypto *context, uint32_t sequence, uint32_t field, uint32_t value, uint8_t ciphertext[32]);
+int sn_probe_healthy_request(SNProbeCrypto *context, uint32_t sequence, int mode, int ceiling, int floor, uint8_t ciphertext[32]);
 int sn_probe_display_request(SNProbeCrypto *context, uint8_t ciphertext[32]);
 typedef struct {
     SNSessionPacketMetadata metadata;
@@ -62,3 +65,8 @@ int sn_probe_test_offset(uint8_t first, uint8_t second, size_t *offset);
 void sn_probe_test_rng_failure(int fail);
 #endif
 #endif
+
+// Local, non-synchronizing Keychain storage of validated bank credentials.
+SNProbeCredential *sn_probe_credential_load(const char *bank);
+int sn_probe_credential_save(const char *bank, const SNProbeCredential *credential);
+int sn_probe_credential_forget(const char *bank);

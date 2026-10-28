@@ -168,6 +168,21 @@ final class ProbeCredential {
         }
         if pointer == nil { return nil }
     }
+    private init(pointer: OpaquePointer) { self.pointer = pointer }
+    static func load(bank: UUID) -> ProbeCredential? {
+        guard let pointer = bank.uuidString.withCString({ sn_probe_credential_load($0) }) else { return nil }
+        return ProbeCredential(pointer: pointer)
+    }
+    func save(bank: UUID) -> Bool {
+        bank.uuidString.withCString { sn_probe_credential_save($0, pointer) != 0 }
+    }
+    static func forget(bank: UUID) -> Bool {
+        bank.uuidString.withCString { sn_probe_credential_forget($0) != 0 }
+    }
+    func copy() -> ProbeCredential? {
+        guard let pointer, let copy = sn_probe_credential_clone(pointer) else { return nil }
+        return ProbeCredential(pointer: copy)
+    }
     func clear() { sn_probe_credential_destroy(pointer); pointer = nil }
     deinit { sn_probe_credential_destroy(pointer) }
 }
@@ -238,9 +253,11 @@ protocol ProbeCryptography: AnyObject {
     func displayRequest() throws -> Data
     func accessReply(_ ciphertext: Data) throws -> AccessPacket
     func credentialRequest(_ credential: ProbeCredential) throws -> Data
+    func healthyRequest(_ change: HealthyChange, sequence: UInt32) throws -> Data
     func clear()
 }
 extension ProbeCryptography {
+    func healthyRequest(_ change: HealthyChange, sequence: UInt32) throws -> Data { throw ProbeFailure.invalidStatus }
     var validationSummary: PacketValidationSummary? { nil }
     func credentialRequest(_ credential: ProbeCredential) throws -> Data { throw ProbeFailure.invalidCredential }
 }
@@ -313,6 +330,16 @@ final class NativeProbeCrypto: ProbeCryptography {
         guard sn_probe_display_request(pointer, &bytes) == 1 else { throw ProbeFailure.sessionDerivation }
         return Data(bytes)
     }
+    func healthyRequest(_ change: HealthyChange, sequence: UInt32) throws -> Data {
+        guard change.valid, let pointer = storage.pointer else { throw ProbeFailure.invalidStatus }
+        var bytes = [UInt8](repeating: 0, count: 32)
+        if let (field, value) = change.screen.first {
+            guard sn_probe_screen_request(pointer, sequence, field.writeField, value, &bytes) == 1 else { throw ProbeFailure.writeRejected }
+            return Data(bytes)
+        }
+        guard sn_probe_healthy_request(pointer, sequence, change.mode.map(Int32.init) ?? -1, change.ceiling.map(Int32.init) ?? -1, change.floor.map(Int32.init) ?? -1, &bytes) == 1 else { throw ProbeFailure.writeRejected }
+        return Data(bytes)
+    }
     func credentialRequest(_ credential: ProbeCredential) throws -> Data {
         defer { credential.clear() }
         guard let pointer = storage.pointer, let token = credential.pointer else { throw ProbeFailure.invalidCredential }
@@ -372,6 +399,9 @@ enum ProbeAction {
     case observedPacket(SessionPacketMetadata)
     case authenticationStatus(AuthStatusSummary)
     case decodedTelemetry
+    case batteryFields([UInt16])
+    case telemetryValueUnavailable(TelemetryValidationSummary)
+    case telemetryValidation(TelemetryValidationSummary)
     case packetValidation(PacketValidationSummary)
     case finished(ProbeResult)
 }
@@ -399,6 +429,33 @@ final class KeyExchangeProbe {
     private var pendingTelemetry: [P512TelemetryDelta] = []
     private var credential: ProbeCredential?
     private var pendingCredentialAccepted: Bool?
+    let live: Bool
+    var onTelemetry: ((P512TelemetryDelta) -> Void)?
+    private var settingsID: UUID?
+    private var settingsPhase = 0
+    private var settingsDeadline: TimeInterval?
+    private var settingsExpectedMode: UInt32?
+    private var settingsChange: HealthyChange?
+    private var settingsReadback = HealthySettings()
+    private var settingsCompletion: ((Bool) -> Void)?
+    private var settingsSequence: UInt32 = 3
+    func applyHealthy(_ change: HealthyChange, completion: @escaping (Bool) -> Void) {
+        guard live, isActive, stage == .observing, access?.credentialAccepted == true, settingsID == nil, change.valid, settingsSequence < UInt32.max, let crypto else { completion(false); return }
+        do {
+            let bytes = try crypto.healthyRequest(change, sequence: settingsSequence); settingsSequence += 1
+            settingsExpectedMode = change.mode ?? access?.latestDelta?.healthyMode
+            settingsChange = change; settingsCompletion = completion; settingsPhase = 1
+            settingsDeadline = now() + 3; settingsID = UUID()
+            onAction?(.write(settingsID!, ProbeFrameCodec.encode(bytes, encrypted: true))); onChange?()
+        } catch { completion(false) }
+    }
+    func cancelSettings() { finishSettings(false) }
+    private func finishSettings(_ confirmed: Bool) {
+        let callback = settingsCompletion
+        settingsCompletion = nil; settingsID = nil; settingsDeadline = nil; settingsChange = nil; settingsPhase = 0
+        callback?(confirmed); onChange?()
+    }
+    private var lastUpload: TimeInterval?
     private var observationInterval: TimeInterval { kind.requestsDisplay ? 30 : 8 }
     private var overallInterval: TimeInterval {
         kind.requestsDisplay ? 46 : kind == .telemetryAccess ? 16 : 8
@@ -407,10 +464,12 @@ final class KeyExchangeProbe {
     var elapsed: TimeInterval { result?.elapsed ?? startedAt.map { max(0, now() - $0) } ?? 0 }
     var deadline: TimeInterval? {
         guard isActive, let startedAt else { return nil }
+        if live && stage == .observing { return min((lastUpload ?? stageStartedAt) + 15, settingsDeadline ?? .infinity) }
         let setupLimit = kind.requestsDisplay && stage != .observing ? startedAt + 16 : startedAt + overallInterval
         return min(setupLimit, stageStartedAt + (stage == .observing ? observationInterval : 3))
     }
-    init(kind: ProbeKind = .keyExchange, credential: ProbeCredential? = nil, now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }, makeCrypto: @escaping () throws -> any ProbeCryptography = { try NativeProbeCrypto() }) {
+    init(kind: ProbeKind = .keyExchange, live: Bool = false, credential: ProbeCredential? = nil, now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }, makeCrypto: @escaping () throws -> any ProbeCryptography = { try NativeProbeCrypto() }) {
+        self.live = live
         self.kind = kind; self.now = now; self.makeCrypto = makeCrypto
         self.credential = credential
         if kind.requestsDisplay { access = AccountFreeAccessSummary() }
@@ -436,6 +495,16 @@ final class KeyExchangeProbe {
         } catch { fail(.randomOrKeyGeneration) }
     }
     func writeCompleted(_ id: UUID, success: Bool) {
+        if isActive, settingsID == id {
+            guard success else { finishSettings(false); return }
+            if settingsPhase == 1 {
+                do {
+                    let bytes = try crypto!.displayRequest(); settingsPhase = 2; settingsID = UUID(); settingsDeadline = now() + 3
+                    onAction?(.write(settingsID!, ProbeFrameCodec.encode(bytes, encrypted: true)))
+                } catch { finishSettings(false) }
+            } else { settingsPhase = 3; settingsReadback = HealthySettings(); settingsDeadline = now() + 5 }
+            onChange?(); return
+        }
         guard isActive, writeID == id, !acknowledged else { return }
         guard checkDeadline() else { return }
         guard success else { fail(.writeRejected); return }
@@ -458,7 +527,7 @@ final class KeyExchangeProbe {
                     if kind == .telemetryAccess {
                         let metadata = try crypto.inspectPacket(payload)
                         // Bound both observation work and header summaries. No raw previews.
-                        guard observedPacketCount < 1000 else { throw ProbeFailure.bufferLimit }
+                        guard live || observedPacketCount < 1000 else { throw ProbeFailure.bufferLimit }
                         if !metadata.isStatusReply { observedPacketCount += 1 }
                         if observedHeaders.count < 32, observedHeaders.insert(metadata).inserted {
                             onAction?(.observedPacket(metadata))
@@ -549,7 +618,7 @@ final class KeyExchangeProbe {
         issue(.requestingDisplay, payload: payload, encrypted: true)
     }
     private func receiveAccess(_ packet: AccessPacket) throws {
-        guard observedPacketCount < 1000 else { throw ProbeFailure.bufferLimit }
+        guard live || observedPacketCount < 1000 else { throw ProbeFailure.bufferLimit }
         if !packet.metadata.isStatusReply { observedPacketCount += 1 }
         if observedHeaders.count < 32, observedHeaders.insert(packet.metadata).inserted {
             onAction?(.observedPacket(packet.metadata))
@@ -572,6 +641,10 @@ final class KeyExchangeProbe {
             guard stage == .requestingDisplay || stage == .observing else { return }
             let delta: P512TelemetryDelta
             do { delta = try P512TelemetryDecoder.decodePayload(payload) }
+            catch let summary as TelemetryValidationSummary {
+                onAction?(.telemetryValidation(summary))
+                throw ProbeFailure.invalidTelemetry
+            }
             catch { throw ProbeFailure.invalidTelemetry }
             if stage == .observing { commitTelemetry(delta) }
             else {
@@ -582,17 +655,33 @@ final class KeyExchangeProbe {
         }
     }
     private func commitTelemetry(_ delta: P512TelemetryDelta) {
+        let fields: [UInt16] = [(UInt16(263), delta.health != nil || delta.rejectedHealth != nil), (1251, delta.cycles != nil), (102, delta.temperatureCelsius != nil), (1275, delta.energyInWh != nil), (1274, delta.energyOutWh != nil)].compactMap { $0.1 ? $0.0 : nil }
+        if !fields.isEmpty { onAction?(.batteryFields(fields)) }
+        let latest = access?.latestDelta?.merging(delta) ?? delta
+        access?.latestDelta = latest
+        lastUpload = now(); onTelemetry?(delta)
+        if settingsPhase == 3, let change = settingsChange {
+            settingsReadback.receive(delta)
+            if (change.screen.isEmpty ? settingsReadback.valid && settingsReadback.mode == settingsExpectedMode : true) && settingsReadback.matches(change) { finishSettings(true) }
+        }
+
+        if live { onChange?() }
+        if let rejected = delta.rejectedHealth { onAction?(.telemetryValueUnavailable(rejected)) }
+        if let rejected = delta.rejectedBattery { onAction?(.telemetryValueUnavailable(rejected)) }
         access?.decodedPackets += 1
         access?.portPowerUpdates += delta.ports.values.filter { $0.watts != nil }.count
-        let merged = access?.latestDelta?.merging(delta) ?? delta
-        access?.latestDelta = merged
         onAction?(.decodedTelemetry)
     }
     private func transition(_ next: ProbeStage) {
         stage = next; stageStartedAt = now(); onChange?()
     }
     private func checkDeadline() -> Bool {
+        if let deadline = settingsDeadline, now() >= deadline { finishSettings(false) }
         guard let startedAt else { return false }
+        if live && stage == .observing {
+            if now() >= (lastUpload ?? stageStartedAt) + 15 { fail(.stageTimeout); return false }
+            return true
+        }
         if stage == .observing, now() >= stageStartedAt + observationInterval {
             let hasPower = (access?.portPowerUpdates ?? 0) > 0
             let authenticatedOutcome: ProbeOutcome = hasPower ? .authenticatedTelemetryDecoded :
@@ -606,6 +695,7 @@ final class KeyExchangeProbe {
         return true
     }
     private func finish(_ outcome: ProbeOutcome) {
+        finishSettings(false)
         let value = ProbeResult(outcome: outcome, stage: stage, elapsed: elapsed, kind: kind,
             observedPacketCount: observedPacketCount, access: access)
         crypto?.clear(); crypto = nil; codec.clear()
@@ -617,4 +707,17 @@ final class KeyExchangeProbe {
         result = value; stage = .finished
         onChange?(); onAction?(.finished(value))
     }
+}
+
+@MainActor
+protocol BankCredentialStore {
+    func load(bank: UUID) -> ProbeCredential?
+    func save(_ credential: ProbeCredential, bank: UUID) -> Bool
+    func forget(bank: UUID) -> Bool
+}
+@MainActor
+struct KeychainBankCredentialStore: BankCredentialStore {
+    func load(bank: UUID) -> ProbeCredential? { ProbeCredential.load(bank: bank) }
+    func save(_ credential: ProbeCredential, bank: UUID) -> Bool { credential.save(bank: bank) }
+    func forget(bank: UUID) -> Bool { ProbeCredential.forget(bank: bank) }
 }

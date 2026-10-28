@@ -7,15 +7,33 @@ struct SomnoireApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            SomnoireMenuView(bluetooth: appDelegate.bluetooth, openDiagnostics: appDelegate.openDiagnostics)
+            SomnoireMenuView(bluetooth: appDelegate.bluetooth, openDiagnostics: appDelegate.openDiagnostics, openSettings: appDelegate.openSettings)
         } label: { SomnoireStatusLabel(bluetooth: appDelegate.bluetooth) }
-        .menuBarExtraStyle(.menu)
+        .menuBarExtraStyle(.window)
     }
 }
 
 @MainActor
 final class SomnoireAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let bluetooth = BluetoothManager()
+    private var settingsWindow: NSWindow?
+    func openSettings() {
+        bluetooth.settingsVisibility(true)
+        if settingsWindow == nil {
+            let window = NSWindow(contentViewController: NSHostingController(rootView: SomnoireSettingsView(bluetooth: bluetooth, resize: self.resizeSettings)))
+            window.title = "Somnoire Settings"; window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            window.setContentSize(NSSize(width: 560, height: 360)); window.contentMinSize = NSSize(width: 520, height: 340)
+            window.isReleasedWhenClosed = false; window.delegate = self; window.center(); settingsWindow = window
+        }
+        settingsWindow?.makeKeyAndOrderFront(nil); NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+    private func resizeSettings(_ pane: Int) {
+        guard let window = settingsWindow else { return }
+        let height = min(pane == 1 ? 570.0 : pane == 2 ? 360.0 : 430.0, (window.screen?.visibleFrame.height ?? 800) - 80)
+        var frame = window.frame; let top = frame.maxY
+        frame.size.height = window.frameRect(forContentRect: NSRect(x: 0, y: 0, width: 560, height: height)).height; frame.origin.y = top-frame.height
+        window.setFrame(frame, display: true, animate: false)
+    }
     private var diagnosticsWindow: NSWindow?
     func openDiagnostics() {
         if diagnosticsWindow == nil {
@@ -31,7 +49,18 @@ final class SomnoireAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
     func windowWillClose(_ notification: Notification) {
+        if notification.object as? NSWindow === settingsWindow { bluetooth.settingsVisibility(false); settingsWindow = nil }
         if notification.object as? NSWindow === diagnosticsWindow { bluetooth.diagnosticsClosed() }
+    }
+    func windowDidMiniaturize(_ notification: Notification) {
+        if notification.object as? NSWindow === settingsWindow { bluetooth.settingsVisibility(false) }
+    }
+    func windowDidDeminiaturize(_ notification: Notification) {
+        if notification.object as? NSWindow === settingsWindow { bluetooth.settingsVisibility(true) }
+    }
+    func applicationDidHide(_ notification: Notification) { bluetooth.settingsVisibility(false) }
+    func applicationDidUnhide(_ notification: Notification) {
+        if settingsWindow?.isVisible == true && settingsWindow?.isMiniaturized == false { bluetooth.settingsVisibility(true) }
     }
     static func shouldRestoreMonitoring(isTestHost: Bool) -> Bool { !isTestHost }
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -46,6 +75,7 @@ final class SomnoireAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
             NSApplication.shared.terminate(nil); return
         }
         bluetooth.resumeSavedMonitoring()
+        if !UserDefaults.standard.bool(forKey: "onboardingComplete") { openSettings() }
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { false }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

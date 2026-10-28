@@ -2,13 +2,15 @@
 #include "ProbeCrypto.h"
 #include "../Vendor/micro-ecc/uECC.h"
 #include <Security/SecRandom.h>
+#include <Security/SecItem.h>
+#include <CoreFoundation/CoreFoundation.h>
 #include <CommonCrypto/CommonCryptor.h>
 #include <CommonCrypto/CommonDigest.h>
 #include <dispatch/dispatch.h>
 #include <stdlib.h>
 #include <string.h>
 
-// Secret values never enter Swift Data, diagnostics, files, or subprocesses.
+// Session secrets remain opaque. Validated bank tokens may enter the local Keychain only.
 struct SNProbeCrypto {
     uint8_t private_key[21];
     uint8_t key[16];
@@ -49,6 +51,12 @@ SNProbeCredential *sn_probe_credential_create(const uint8_t *user_id, size_t use
     }
     wipe(digest, sizeof(digest)); wipe(&md5, sizeof(md5));
     return credential;
+}
+SNProbeCredential *sn_probe_credential_clone(const SNProbeCredential *credential) {
+    if (!credential) return NULL;
+    SNProbeCredential *copy = calloc(1, sizeof(*copy));
+    if (copy) memcpy(copy, credential, sizeof(*copy));
+    return copy;
 }
 void sn_probe_credential_destroy(SNProbeCredential *credential) {
     if (credential) { wipe(credential, sizeof(*credential)); free(credential); }
@@ -259,6 +267,46 @@ int sn_probe_inspect_packet(SNProbeCrypto *c, const uint8_t *ciphertext, size_t 
     wipe(packet, sizeof(packet));
     return valid ? 1 : -1;
 }
+int sn_probe_screen_request(SNProbeCrypto *c, uint32_t seq, uint32_t field, uint32_t value, uint8_t out[32]) {
+    if (!out) return 0; wipe(out,32);
+    int valid=0;
+    switch(field) {
+    case 14: valid=value<=100; break;
+    case 301: case 304: case 306: valid=value==1 || value==2; break;
+    case 554: if(value==UINT32_MAX) { valid=1; break; }
+    case 12: case 302: case 305: valid=value==30 || value==60 || value==300 || value==600 || value==1800 || value==3600; break;
+    default: return 0;
+    }
+    if(!valid || !c || !c->credential_authenticated || seq<3) return 0;
+    uint8_t p[32]={0xaa,3,0,0,0,13,0,0,0,0,0,0,33,2,1,1,254,17}; size_t n=18;
+    uint32_t key=field<<3;
+    do { uint8_t b=key&127; key>>=7; p[n++]=b|(key?128:0); } while(key);
+    do { uint8_t b=value&127; value>>=7; p[n++]=b|(value?128:0); } while(value);
+    p[2]=(uint8_t)(n-18); p[4]=crc8(p,4);
+    for(unsigned i=0;i<4;i++) p[6+i]=(uint8_t)(seq>>(i*8));
+    uint16_t crc=crc16(p,n); p[n++]=crc&255; p[n++]=crc>>8; size_t written=0;
+    CCCryptorStatus status=CCCrypt(kCCEncrypt,kCCAlgorithmAES,kCCOptionPKCS7Padding,c->key,sizeof(c->key),c->iv,p,n,out,32,&written);
+    wipe(p,sizeof(p)); if(status!=kCCSuccess || written!=32) { wipe(out,32); return 0; } return 1;
+}
+int sn_probe_healthy_request(SNProbeCrypto *c, uint32_t sequence, int mode, int ceiling, int floor, uint8_t ciphertext[32]) {
+    if (!ciphertext) return 0;
+    wipe(ciphertext, 32);
+    if (!c || !c->credential_authenticated || sequence < 3 ||
+        (mode != -1 && mode != 1 && mode != 2) || (ceiling != -1 && (ceiling < 80 || ceiling > 100)) ||
+        (floor != -1 && (floor < 0 || floor > 20)) || (mode == -1 && ceiling == -1 && floor == -1)) return 0;
+    uint8_t packet[32] = {0xaa,3,0,0,0,0x0d,0,0,0,0,0,0,0x21,2,1,1,0xfe,0x11};
+    size_t n = 18;
+    if (mode != -1) { packet[n++] = 0xe0; packet[n++] = 0x0b; packet[n++] = (uint8_t)mode; }
+    if (ceiling != -1) { packet[n++] = 0x88; packet[n++] = 0x02; packet[n++] = (uint8_t)ceiling; }
+    if (floor != -1) { packet[n++] = 0x90; packet[n++] = 0x02; packet[n++] = (uint8_t)floor; }
+    packet[2] = (uint8_t)(n-18); packet[4] = crc8(packet,4);
+    for (unsigned i=0;i<4;i++) packet[6+i]=(uint8_t)(sequence>>(i*8));
+    uint16_t crc=crc16(packet,n); packet[n++]=crc&255; packet[n++]=crc>>8;
+    size_t written=0;
+    CCCryptorStatus status=CCCrypt(kCCEncrypt,kCCAlgorithmAES,kCCOptionPKCS7Padding,c->key,sizeof(c->key),c->iv,packet,n,ciphertext,32,&written);
+    wipe(packet,sizeof(packet));
+    if(status!=kCCSuccess || written!=32) { wipe(ciphertext,32); return 0; } return 1;
+}
 int sn_probe_display_request(SNProbeCrypto *c, uint8_t ciphertext[32]) {
     if (!ciphertext) return 0;
     wipe(ciphertext, 32);
@@ -373,3 +421,46 @@ int sn_probe_test_shared(const uint8_t private_key[21], const uint8_t peer[40], 
         uECC_shared_secret(peer, private_key, secret, uECC_secp160r1());
 }
 #endif
+
+static CFMutableDictionaryRef credential_query(const char *bank) {
+    if (!bank) return NULL;
+    CFStringRef account = CFStringCreateWithCString(NULL, bank, kCFStringEncodingUTF8);
+    if (!account) return NULL;
+    CFMutableDictionaryRef q = CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    CFDictionarySetValue(q, kSecClass, kSecClassGenericPassword);
+    CFDictionarySetValue(q, kSecAttrService, CFSTR("org.somnoire.bank-credential"));
+    CFDictionarySetValue(q, kSecAttrAccount, account); CFRelease(account);
+    CFDictionarySetValue(q, kSecAttrSynchronizable, kCFBooleanFalse);
+    return q;
+}
+SNProbeCredential *sn_probe_credential_load(const char *bank) {
+    CFMutableDictionaryRef q = credential_query(bank); if (!q) return NULL;
+    CFDictionarySetValue(q, kSecReturnData, kCFBooleanTrue);
+    CFTypeRef result = NULL; OSStatus status = SecItemCopyMatching(q, &result); CFRelease(q);
+    SNProbeCredential *credential = NULL;
+    if (status == errSecSuccess && result && CFGetTypeID(result) == CFDataGetTypeID() && CFDataGetLength(result) == 32) {
+        credential = calloc(1, sizeof(*credential));
+        if (credential) memcpy(credential->token, CFDataGetBytePtr(result), 32);
+    }
+    if (result) CFRelease(result); return credential;
+}
+int sn_probe_credential_save(const char *bank, const SNProbeCredential *credential) {
+    if (!credential) return 0;
+    CFMutableDictionaryRef q = credential_query(bank); if (!q) return 0;
+    CFDataRef data = CFDataCreate(NULL, credential->token, 32);
+    CFMutableDictionaryRef attrs = CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    CFDictionarySetValue(attrs, kSecValueData, data);
+    CFDictionarySetValue(attrs, kSecAttrAccessible, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly);
+    OSStatus status = SecItemUpdate(q, attrs);
+    if (status == errSecItemNotFound) {
+        CFDictionarySetValue(q, kSecValueData, data);
+        CFDictionarySetValue(q, kSecAttrAccessible, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly);
+        status = SecItemAdd(q, NULL);
+    }
+    CFRelease(attrs); CFRelease(data); CFRelease(q); return status == errSecSuccess;
+}
+int sn_probe_credential_forget(const char *bank) {
+    CFMutableDictionaryRef q = credential_query(bank); if (!q) return 0;
+    OSStatus status = SecItemDelete(q); CFRelease(q);
+    return status == errSecSuccess || status == errSecItemNotFound;
+}

@@ -300,3 +300,270 @@ Next user-assisted checks:
 No account ID or derived credential is retained in the repository. Identity entry
 is still volatile and must be supplied again for a new check. Private code-only
 research inputs and build/test artifacts remain ignored under `build/`.
+
+## C2 payload rejection and diagnostic build (0.5.8)
+
+On 28 October 2026 (Asia/Manila), the user tested C2, labelled “140W in/out,”
+charging one device with no other ports connected. Existing-credential acceptance
+succeeded. A 166-byte V19 FE/15 upload on the established route passed frame
+validation but failed protobuf/measurement validation. The probe ended after
+2.281 seconds, with zero decoded telemetry bodies and port updates, disconnected
+and resumed passive scanning. The cause is not established; C2-specific content
+is only a hypothesis. Previous successful C1 sessions remain valid evidence.
+
+Version 0.5.8 adds typed structural payload-failure diagnostics: reason, top-level
+or nested recognized port, recognized field, zero-based absolute payload byte
+offset at the failing field's key, and expected/observed wire types when known.
+Malformed keys report an unknown field. Unknown field numbers and payload values
+are never exported. Reasons distinguish malformed/truncated data, wrong wire type,
+nonfinite floats, invalid battery percentage, integer range and size limits.
+Validation behavior, commands, routes, authentication and deadlines are unchanged.
+Rejected bodies commit no partial measurements or success counters. FE/12 remains
+unclassified, independent of telemetry receipt.
+
+Next hardware check: repeat the same C2-only output setup using 0.5.8, allow the
+bounded probe to finish and share Copy Diagnostics. Determine the precise rejection
+before changing acceptance rules or resuming port mapping. No live 0.5.8 result
+is claimed by synthetic verification.
+
+0.5.8 verification: `build/Phase2EC2Diagnostics-R2.xcresult` passed 87 tests
+with six opt-in hardware checks skipped and zero failures (81 hardware-free
+passed). Synthetic tests cover structural categories and C2 nested fields,
+absolute offsets, no partial measurement/counter commit, secret cleanup and typed
+export. The initial sandboxed run could not execute SwiftUI compiler plugins;
+the subsequent Xcode run passed. Universal Debug and Release builds both contain
+arm64 and x86_64. Release signature verification passed, with only App Sandbox
+and Bluetooth entitlements. Logs: `build/TelemetryResearch/c2-{tests-r2,debug-r1,release-r1}.log`.
+Actual-bank 0.5.8 decoding, disconnection and passive scan restoration remain
+the next user-assisted hardware check; native visual QA was not performed.
+
+## Battery field isolated from port decoding (0.5.9)
+
+The next C2-only user report on 0.5.8 again accepted the credential, then identified
+`invalidBattery`, top-level field 262, byte offset 22, expected/observed wire 5.
+The first 166-byte FE/15 upload therefore reached the float decoder and failed
+the application range check, rather than authentication or frame validation.
+The run ended after 1.525 seconds, decoded no bodies, disconnected and resumed
+passive scanning. The raw battery value remains unknown.
+
+The retained official app decodes that float and clamps it only in the PB501
+consumer. In 0.5.9 Somnoire preserves valid port telemetry while marking an
+out-of-range finite SOC unavailable, clearing any earlier retained SOC, and
+exporting a structural `Telemetry measurement unavailable` warning. It never
+clamps, scales, substitutes zero or infers a sentinel. A body must still pass all
+other validation before either warning or measurements are committed. Authentication,
+commands, routes, limits and passive battery monitoring remain unchanged.
+See [P512 Protocol](P512-Protocol.md) for source evidence and semantic details.
+
+Next hardware check remains C2-only output with the same device. Run 0.5.9,
+record protocol fields and W/V/A separately from Copy Diagnostics, and confirm
+normal bounded completion, disconnect and passive scan restoration. A passing
+synthetic test does not establish actual-bank C2 measurements or physical mapping.
+
+0.5.9 verification: `build/Phase2EBatteryIsolation-R1.xcresult` passed 89 tests,
+with six opt-in hardware checks skipped and zero failures (83 hardware-free
+passed). Added synthetic coverage includes C2 power with invalid SOC, inclusive
+0/100, repeated SOC fields, old-value invalidation and recovery, malformed port
+rejection, write-acknowledgement barriers, bounded completion and private export.
+Universal Debug/Release builds passed for arm64/x86_64. Release signature verified;
+entitlements remain App Sandbox and Bluetooth only. Logs are under
+`build/TelemetryResearch/battery-isolation-{tests,debug,release}-r1.log`.
+The verified Release was launched for user-assisted hardware validation.
+
+## Verified output mappings and 0.6.0 dashboard
+
+The user supplied three completed 0.5.9 output sessions: C2 decoded 87 bodies
+with 29 port updates in 31.227 s; C3 decoded 87/29 in 31.647 s; C4 decoded
+90/30 in 31.584 s. All accepted credentials, disconnected and resumed scanning.
+The user confirmed wattage agreement and identified C2=856, C3=853, C4=854,
+complementing the earlier C1=852 mapping. Approximately -1 W with 9.1–9.2 V
+and 0.1 A was expected because the connected device was full. C3 is labelled
+65 W maximum. Field 857 is the bottom dock/pogo connection; the user has no dock.
+These are output comparisons; input direction remains app-convention-derived.
+
+Version 0.6.0 introduces a native five-card dashboard with a separate live-session
+mode. It uses the existing commands/authentication and streams only while the
+panel is visible, with a 15-second validated-display inactivity deadline. Diagnostic
+probes retain their original limits. Each W/V/A sample expires independently
+after five seconds; missing data never becomes zero or a claim of disconnection.
+The battery card uses advertisement percentage with explicit retained-reading age.
+PD/PPS is omitted because the inspected UsbRealDisplayInfo schema contains only
+W/V/A. Settings retains battery monitoring, selection, Forget and Diagnostics.
+
+The numeric ID clears after Connect. A derived bank-specific credential remains
+only in memory until Quit/Forget/target change/rejection. Each session receives
+a separately allocated copy that is wiped after use. No account ID/token is
+written to preferences, diagnostics or Keychain. Closing the panel cancels its
+session and restores enabled passive scanning after disconnect; diagnostic-window
+closure cannot cancel a live owner. Sleep/Bluetooth loss ends a session, and
+errors require explicit Retry rather than a reconnect loop.
+
+Pending user-assisted acceptance: stream beyond 30 seconds on the bank, unload
+and change ports, close/reopen the panel, test positive input direction, and
+confirm passive scanning resumes. Synthetic streams do not establish these
+hardware behaviors.
+
+0.6.0 local validation: `build/Dashboard-Final.xcresult` passed 93 tests with six
+opt-in hardware checks skipped (87 passed). Added tests cover a synthetic
+90-second live session, 15-second silence termination, credential copy cleanup,
+independent sample expiry/zero, and native normal/accessibility-size rendering.
+The empty dashboard renders were inspected; connected/error/stale battery visual
+states and real AppKit panel lifecycle remain pending live UI verification.
+Debug and Release contain arm64/x86_64; Release signature verifies and retains
+only App Sandbox and Bluetooth entitlements. Logs: `build/dashboard-tests-final.log`
+and `build/dashboard-release-final.log`. The verified Release was launched.
+
+## 0.7.0 Battery Information checkpoint
+
+Battery card In/Out watts now use device aggregate fields 3/4 directly. Health,
+cycles, signed Celsius temperature and device energy counters are decoded from
+the existing allowlisted uploads and exposed in the local diagnostic preview.
+The dashboard disclosure retains per-field in-memory receipt ages across
+disconnect, clearing snapshots on Forget/target change/Quit. Auto/Wh/kWh and
+°C/°F are display-only preferences. No charging-limit or other device-setting
+writes were added. Field/unit provenance is in P512 Protocol; bank availability,
+accuracy and counter reset semantics remain unverified.
+
+`build/BatteryInfo-Units.xcresult`: 97 tests executed, six opt-in hardware checks
+skipped, zero failures (91 hardware-free passed). Tests cover signed int32
+extremes/negative encoding, UInt32 limits, health isolation and recovery,
+incremental ages, explicit zero, aggregate expiry, counter decrease replacement,
+energy/temperature conversion and filtered presence-only diagnostics. Native
+collapsed/expanded, populated/unavailable/aged detail renders and the dashboard
+normal/larger-text renders were inspected. These are synthetic render checks,
+not a live hardware/UI session. Universal Debug/Release contain arm64/x86_64;
+Release signature and App Sandbox/Bluetooth-only entitlements verify. Logs:
+`build/battery-info-tests-units.log`, `build/battery-info-release-final.log`.
+
+Next check: connect in the dashboard, expand Battery Information and separately
+record displayed measurements and Copy Diagnostics. Compare aggregate W under
+output/input and the battery details against the official app in separate BLE
+sessions. Unreported fields must remain unavailable. No hardware result for
+0.7.0 is claimed from these synthetic tests.
+
+## 0.8.0 Healthy Charging checkpoint
+
+Battery Information and Healthy Charging share the dashboard card style. The
+user confirmed the 0.7.0 battery values against the official app (100% health,
+35 cycles, 31°C, 2.730/2.124 kWh input/output). Received temperature updates
+continue at their source cadence; only connected samples under five seconds
+old are labelled Live. No polling/report-period settings were introduced.
+
+Healthy Charging reads fields 848/270/271 and stages mode/ceiling/floor edits
+locally until Apply. Complete recognized current-session reports and an active
+authenticated owner are required. Mode is verified first, followed by changed
+limits only. Acknowledgement alone cannot produce Applied. A fresh complete
+recognized post-refresh snapshot must match requested values and expected mode.
+Timeout/cancellation results require refresh/review and explicit retry; confirmed
+mode with unconfirmed limits is partial. No replay/rollback/restore is automatic.
+See P512 Protocol for exact app provenance, field mapping and verification policy.
+
+`build/Healthy-VisualGate.xcresult`: 99 tests, six opt-in hardware tests skipped,
+zero failures (93 hardware-free passed). New coverage includes exact encrypted
+requests against independent synthetic OpenSSL vectors, authentication refusal,
+sequence/range refusal, known settings fields, pre-ack/stale readback refusal,
+matching readback, mismatches/timeouts, cancellation without retries and unique
+settings sequences. Unknown/editing card renders and Battery Information card
+renders were inspected against a panel background; actual connected/applying/
+failure interaction remains user-assisted UI validation. Debug/Release are
+universal arm64/x86_64; Release signature verifies with only Bluetooth and
+App Sandbox entitlements. Logs: `build/healthy-tests-visual.log`,
+`build/healthy-release.log`.
+
+No bank setting was changed during development. Next: compare reported healthy
+mode/limits read-only with the official app in separate BLE sessions, then use
+explicit Apply to verify mode and limits on the bank. Reconnect and compare
+reported persistence. Restore original settings explicitly if desired. Physical
+cutoff behavior remains unverified.
+
+## 0.9.0 native settings checkpoint
+
+The user confirmed Healthy Charging controls work. This is recorded as a
+user-confirmed settings result, not independent physical cutoff validation.
+Charging now uses five-percent limit/reserve sliders in a native settings window.
+Existing intermediate values are retained until an explicit edit/Apply. A separate
+Screen pane exposes the source-backed duration, brightness, art and clock scalars.
+Window ownership preserves the authenticated session when the dashboard closes,
+including owned image-picker sheets; final surface closure cancels pending work.
+
+Local artwork selection/crop/zoom and original RGB565 packaging are implemented.
+Upload is deliberately disabled pending lower-level native transfer acknowledgements,
+resource identity and activation research. No transfer command is guessed. See
+P512 Protocol for exact code provenance and remaining blockers. No app/account
+storage, secrets or provisioning state was read or altered.
+
+`build/Screen-ArtGate.xcresult`: 102 tests executed, six opt-in hardware checks
+skipped, zero failures (96 hardware-free passed). Tests include independent
+OpenSSL screen-write vectors, source-backed field/value restrictions, screen
+readback without a Healthy Charging baseline, acknowledgement/stale/mismatch
+handling, native light/dark pane renders, RGB565/header bytes, EXIF rotation,
+square crop and alpha-to-black compositing. Unknown pane states were rendered;
+connected controls, actual window/picker ownership and device interactions remain
+user-assisted acceptance. Progress/error transfer states cannot be validated
+because artwork transport remains gated. Universal Debug/Release and signing
+checks accompany this checkpoint. Added entitlement: user-selected read-only files.
+Logs: `build/screen-tests-art.log`, `build/screen-release-art.log`.
+
+Next: read and compare the eight screen settings with the official app, then
+explicitly Apply and compare supported durations, brightness, clock enable/format
+and battery/charging durations on the bank, including reconnect persistence.
+Artwork upload/activation remains an unfinished gated capability, with local
+preview usable now. Hardware settings were not changed during development.
+
+## 0.10.0 compact settings checkpoint
+
+Charging and Screen are directly editable when recognized current-session data
+is available. Each pane owns its draft, baseline and feedback, with a single
+Apply/Revert area. Controls remain visible after verified success (Settings applied).
+Drafts survive pane changes, preserve intermediate device values and detect
+external conflicts. A pane-wide screen Apply uses sequential restricted writes,
+verifying each and the final changed-field snapshot. No batch wire format or
+untouched-field write was introduced. Charging keeps its mode-first sequence.
+
+Closing settings cancels the settings queue independently of dashboard telemetry,
+rejecting late acknowledgements and never replaying writes. Confirmed changes
+are tracked for partial-completion feedback. Returning to settings after an
+unconfirmed operation exposes Refresh/review rather than automatic retry.
+Verified telemetry is merged before callbacks so subsequent writes see the
+newly confirmed mode, rather than an earlier packet's state.
+
+Default content sizes are 560×430 Charging and 560×570 Screen. Pane changes
+resize the window while preserving its top edge, bounded by screen height;
+telemetry does not resize it. Compact grouped rows replace repeated setting
+cards, action areas and status labels. The artwork editor is a separate sheet
+with a side-by-side crop preview and controls. Dashboard readout spacing and
+Diagnostics' resizable log area were retained because they carry substantive
+content rather than the settings window's unused fixed-height space.
+
+Artwork upload remains incomplete and disabled. Additional static evidence on
+A1/A2/A3 requests, acknowledgement payload checks and field-303 activation is
+recorded in P512 Protocol. Negotiated chunk-limit semantics, independent packet
+fixtures for the lower-level transfer and current-bank local-resource-ID
+acceptance remain concrete research/hardware gates. No physical transfer or
+settings write was attempted during this implementation.
+
+`build/Compact-Panes.xcresult`: 104 tests executed, six opt-in hardware tests
+skipped, zero failures (98 passed). Added tests exercise direct-draft initialization,
+conflicts/Revert, pane feedback and settings-only cancellation while telemetry
+remains active, including refusal of late acknowledgements. Existing protocol,
+readback, image and unit regressions pass. Light/dark compact unknown-state panes
+were rendered at actual default sizes and inspected; populated/working-bank
+interaction, partial batch application and native sheet use remain user-assisted
+acceptance. Upload progress/rejection/activation tests cannot establish a
+nonexistent transfer implementation. Universal build and signature checks are
+recorded with `build/compact-tests-panes.log`, `build/compact-release-final.log`.
+
+## 0.11.0 onboarding checkpoint
+
+Implemented General settings for selecting a bank and entering the existing numeric
+ID fallback, plus native Launch at Login registration. A valid authenticated
+telemetry upload gates local, non-synchronizing, device-only Keychain credential
+storage. Quit clears the in-memory copy; Forget and rejection delete stored access.
+The credential-store interface permits isolated testing without accessing Keychain.
+Surface reopening and wake permit one connection attempt; failures require Retry.
+
+The hardware-free suite passed 99 tests (105 total, six opt-in hardware tests skipped).
+General settings was rendered in light/dark appearances. Actual Keychain persistence
+across relaunch, login approval and larger accessibility sizing remain acceptance
+items. No physical artwork upload or bank-binding change was performed. Artwork
+transport remains incomplete and gated as detailed in P512-Protocol.md.

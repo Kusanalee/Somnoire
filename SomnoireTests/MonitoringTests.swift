@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 import AppKit
+import ImageIO
 @testable import Somnoire
 
 final class MonitoringTests: XCTestCase {
@@ -105,6 +106,125 @@ final class MonitoringTests: XCTestCase {
         XCTAssertFalse(SomnoireAppDelegate.shouldRestoreMonitoring(isTestHost: true))
         manager.shutdown(); manager.startMonitoring(); XCTAssertFalse(manager.isScanning)
     }
+    func testLiveMeasurementFreshnessPreservesZeroAndIndependentTimes() {
+        let start = Date(timeIntervalSince1970: 100)
+        let zero = BluetoothManager.LiveValue(value: 0, time: start)
+        let voltage = BluetoothManager.LiveValue(value: 9.2, time: start.addingTimeInterval(3))
+        XCTAssertEqual(zero.fresh(at: start.addingTimeInterval(4)), 0)
+        XCTAssertNil(zero.fresh(at: start.addingTimeInterval(5)))
+        XCTAssertEqual(voltage.fresh(at: start.addingTimeInterval(5)), 9.2)
+    }
+    func testArtworkOrientationAndBlackComposite() throws {
+        let context = try XCTUnwrap(CGContext(data: nil, width: 2, height: 1, bitsPerComponent: 8, bytesPerRow: 8,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let transparent = try XCTUnwrap(context.makeImage())
+        let cropped = try XCTUnwrap(ArtworkCodec.crop(transparent, zoom: 1, x: 0, y: 0))
+        XCTAssertEqual(cropped.width, 240); XCTAssertEqual(cropped.height, 240)
+        let bytes = try XCTUnwrap(cropped.dataProvider?.data) as Data
+        XCTAssertEqual(Array(bytes.prefix(4)), [0,0,0,255])
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, "public.jpeg" as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, transparent, [kCGImagePropertyOrientation: 6] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(data, nil))
+        let normalized = try XCTUnwrap(ArtworkCodec.normalized(source))
+        XCTAssertEqual(normalized.width, 1); XCTAssertEqual(normalized.height, 2)
+    }
+
+    @MainActor
+    func testSettingsRenderingAndArtworkPackage() throws {
+        let manager = BluetoothManager(preferences: UserDefaults(suiteName: "SomnoireTests.SettingsRender")!)
+        defer { manager.shutdown() }
+        manager.panelVisibility(true); manager.settingsVisibility(true); manager.panelVisibility(false)
+        XCTAssertFalse(manager.isProbing); manager.settingsVisibility(false)
+        for pane in [0,1,2] {
+        for dark in [false, true] {
+            let height: CGFloat = pane == 1 ? 570 : 430
+            let view = NSHostingView(rootView: SomnoireSettingsView(bluetooth: manager, pane: pane).frame(width: 560, height: height).background(dark ? Color(white: 0.12) : Color(white: 0.95))
+                .environment(\.colorScheme, dark ? .dark : .light))
+            view.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: height), styleMask: [.titled], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false; window.contentView = view; window.appearance = view.appearance
+            window.orderFront(nil)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            view.layoutSubtreeIfNeeded(); window.displayIfNeeded()
+            let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try bitmap.representation(using: .png, properties: [:])?.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("settings-\(pane)-\(dark).png"))
+            window.close()
+        }
+        }
+        let pixel: [UInt8] = [255,0,0,255]
+        let rgba = Array(repeating: pixel, count: 240*240).flatMap { $0 }
+        let package = try XCTUnwrap(ArtworkCodec.package(rgba: rgba, id: "test"))
+        XCTAssertEqual(package.count, 115276)
+        XCTAssertEqual(Array(package.prefix(12)), [0,0,0,2,0,0,0,4,0,0,0,4])
+        XCTAssertEqual(Array(package[60..<64]), [0,0,0,72])
+        XCTAssertEqual(Array(package[76..<80]), [0,248,0,248])
+        XCTAssertNil(ArtworkCodec.package(rgba: [], id: "test"))
+        XCTAssertTrue(ScreenField.chargingClockDuration.accepts(UInt32.max))
+        XCTAssertFalse(ScreenField.clockDuration.accepts(UInt32.max))
+        XCTAssertFalse(ScreenField.duration.accepts(81))
+        XCTAssertFalse(ScreenField.brightness.accepts(101))
+        XCTAssertEqual(HealthySettings(mode: 1, ceiling: 81, floor: 3).ceiling, 81)
+        let delta = try P512TelemetryDecoder.decodePayload(Data([0x28,100,0x90,1,30]))
+        XCTAssertEqual(delta.screen[.brightness], 100); XCTAssertEqual(delta.screen[.duration], 30)
+    }
+
+    @MainActor
+    func testHealthyCardRenderingAndSchema() throws {
+        let manager = BluetoothManager(preferences: UserDefaults(suiteName: "SomnoireTests.HealthyRender")!)
+        defer { manager.shutdown() }
+        let delta = try P512TelemetryDecoder.decodePayload(Data([0x80,0x35,1,0xf0,0x10,80,0xf8,0x10,20]))
+        var settings = HealthySettings(); settings.receive(delta)
+        XCTAssertTrue(settings.valid); XCTAssertEqual(settings.ceiling, 80); XCTAssertEqual(settings.floor, 20)
+        XCTAssertFalse(HealthyChange(ceiling: 79).valid); XCTAssertFalse(HealthyChange(floor: 21).valid)
+        XCTAssertFalse(HealthyChange(mode: 0).valid)
+        for editing in [false, true] {
+            let view = NSHostingView(rootView: HealthyChargingSection(bluetooth: manager, editing: editing, baseline: settings, draft: settings, expanded: true)
+                .frame(width: 304).padding(12).background(Color(white: 0.12)).environment(\.colorScheme, .dark))
+            view.appearance = NSAppearance(named: .darkAqua)
+            view.frame = NSRect(origin: .zero, size: view.fittingSize); view.layoutSubtreeIfNeeded()
+            let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try bitmap.representation(using: .png, properties: [:])?.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("healthy-card-\(editing).png"))
+        }
+    }
+
+    @MainActor
+    func testBatteryInformationSectionRendering() throws {
+        var info = BatteryInformation()
+        info.receive(P512TelemetryDelta(health: 95, cycles: 32, temperatureCelsius: -4, energyInWh: 999, energyOutWh: 1001), at: Date().addingTimeInterval(-120))
+        for expanded in [false, true] {
+            for populated in [false, true] {
+                let view = NSHostingView(rootView: BatteryInformationSection(information: populated ? info : BatteryInformation(), date: Date(), expanded: expanded)
+                    .frame(width: 304).padding(12).background(Color(white: 0.12)).environment(\.colorScheme, .dark))
+                view.appearance = NSAppearance(named: .darkAqua)
+                view.frame = NSRect(origin: .zero, size: view.fittingSize); view.layoutSubtreeIfNeeded()
+                let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+                try bitmap.representation(using: .png, properties: [:])?.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("battery-info-\(expanded)-\(populated).png"))
+            }
+        }
+    }
+
+    @MainActor
+    func testDashboardNativeRendering() throws {
+        let manager = BluetoothManager(preferences: UserDefaults(suiteName: "SomnoireTests.Dashboard")!)
+        defer { manager.shutdown() }
+        for large in [false, true] {
+            let view = NSHostingView(rootView: SomnoireMenuView(bluetooth: manager)
+                .environment(\.colorScheme, .dark)
+                .environment(\.sizeCategory, large ? .accessibilityExtraExtraExtraLarge : .large))
+            let size = view.fittingSize
+            XCTAssertEqual(size.width, 328, accuracy: 1)
+            view.frame = NSRect(origin: .zero, size: size); view.layoutSubtreeIfNeeded()
+            let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try bitmap.representation(using: .png, properties: [:])?.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("somnoire-dashboard-\(large).png"))
+        }
+    }
+
     @MainActor
     func testDiagnosticsWindowSizingInLightAndDarkAppearance() {
         let manager = BluetoothManager(preferences: UserDefaults(suiteName: "SomnoireTests.Sizing")!)
