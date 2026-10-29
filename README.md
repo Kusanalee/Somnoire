@@ -1,6 +1,6 @@
 ![illustrated Somnoire banner with Phrolova-inspired characters](assets/readme/somnoire-banner.png)
 
-Somnoire is a lightweight, native macOS menu bar app for keeping an eye on supported EcoFlow power banks and managing their settings locally over Bluetooth. check your battery at a glance, peek at the power flowing through each port, then let it settle back into the menu bar.
+Somnoire is a lightweight, native macOS menu bar app for keeping an eye on supported EcoFlow power banks and managing their settings locally over Bluetooth. tested with the **EcoFlow Rapid Pro 27,650 mAh**, known internally as **P512**. it may work on other models, but they are untested. check your battery at a glance, peek at the power flowing through each port, then let it settle back into the menu bar.
 
 [downloads](https://github.com/Kusanalee/Somnoire/releases) · [installation guide](docs/installation.md) · [getting started](#getting-started) · [account-id help](docs/first-time-setup.md) · [building](docs/building.md)
 
@@ -17,23 +17,67 @@ Somnoire is a lightweight, native macOS menu bar app for keeping an eye on suppo
 <details>
 <summary>a look inside settings</summary>
 
-![real Somnoire settings window showing its native sidebar and about pane](assets/readme/settings.png)
+### general
 
-*a real development-build capture. the current app places about last in the sidebar and includes a check for updates button.*
+![Somnoire general settings: appearance, monitoring, experience, units, bank selection, and startup](assets/readme/settings.png)
+
+### alerts
+
+![Somnoire low-battery alerts and notification test controls](assets/readme/settings-alerts.png)
+
+### charging
+
+![Somnoire healthy charging, charge limit, and discharge reserve](assets/readme/settings-charging.png)
+
+### screen
+
+![Somnoire display brightness, duration, and clock controls](assets/readme/settings-screen.png)
+
+### about
+
+![Somnoire about page with app artwork and check for updates](assets/readme/settings-about.png)
 
 </details>
 
 ## quietly useful
 
-| | a little less checking, a little more knowing |
-| :-- | :-- |
-| **battery at a glance** | keep the percentage in your menu bar. optional low-battery alerts offer a quiet nudge, with thresholds from 10% to 30%. |
-| **follow the flow** | full readings show input and output wattage, four USB-C port cards, and expandable battery health, cycles, temperature, and lifetime energy totals. |
-| **make a few adjustments** | change healthy charging, charge limits, discharge reserve, brightness, display duration, and the existing clock’s display options. apply sends edits; revert discards them. |
-| **nearby, over Bluetooth** | remember one selected bank. basic percentage monitoring continues while the app runs; the live connection ends when its dashboard and settings close. |
-| **your Mac, your preferences** | choose System, Light, or Dark appearance, units, optional launch at login, and up to three percentage decimal places when the bank reports fractions. |
+### battery at a glance
 
-missing power readings stay as dashes. the last verified battery percentage stays visible when stale, dimmed with a last-seen label. opening a panel doesn’t make old data fresh.
+- **percentage-only mode:** the default, account-free view keeps your battery in the menu bar without opening a full live connection. Monitor Battery in general settings pauses or resumes nearby monitoring.
+- **honest freshness:** the menu bar and dashboard share the same verified percentage. stale readings stay visible but dim, with a last-seen label; unavailable power readings show dashes instead of invented zeroes.
+- **your preferred detail:** choose 0, 1, 2, or 3 maximum decimal places. trailing zeroes are trimmed, and whole-number Bluetooth advertisements stay whole. fractions depend on what the bank reports, not an estimate from Somnoire.
+
+### follow the flow
+
+- **input and output totals:** full readings show power entering and leaving the bank, alongside the battery percentage.
+- **four USB-C cards:** see each port’s watts, volts, amps, and reported direction. idle and missing data are distinct; see the hardware caveats below for input-direction validation.
+- **expandable battery information:** check health, cycles, temperature, and lifetime energy in/out. previously reported details keep their sample ages when disconnected. choose °C or °F and Auto, Wh, or kWh in general settings.
+
+### a gentler charging routine
+
+- **Healthy Charging:** enable the bank’s supported charging-limit mode. turning it off grays out both limit rows, so unavailable edits aren’t offered.
+- **charge limit and discharge reserve:** set a charge ceiling from 80% to 100% and a discharge reserve from 0% to 20%, in 5-point steps. physical cutoff behavior has not been independently validated.
+- **apply when you’re ready:** changes stay as drafts until Apply. Revert discards them; confirmed feedback uses the bank’s reported settings, and incomplete confirmation is shown rather than assumed successful.
+
+### the bank’s display, your way
+
+- **display controls:** adjust information-display duration and brightness from your Mac.
+- **clock controls:** turn the installed clock on or off, choose 12-hour or 24-hour format, and set separate display durations on battery and while charging.
+- **existing artwork:** Somnoire uses the clock artwork already on the bank. time setup, artwork changes, sharing, and firmware updates remain in the official EcoFlow app; local time sync and artwork uploads are unavailable.
+
+### a quiet nudge
+
+- **opt-in low-battery alerts:** off by default, with a 20% starting threshold. choose 10%, 15%, 20%, 25%, or 30% and send a test notification from alerts settings.
+- **one alert per event:** notifications are silent. a fresh reading five points above your threshold rearms the alert; stale readings do not trigger it, and changing the percentage display precision does not change alert thresholds.
+- **nearby monitoring:** alerts work in both modes without adding an authenticated connection. Somnoire must be running, monitoring enabled, and the bank nearby; monitoring pauses during sleep.
+
+### quietly at home on your Mac
+
+- **native appearance:** choose System, Light, or Dark and keep macOS’s accent color. optional launch at login starts Somnoire with your Mac.
+- **one remembered bank:** select your nearby bank in general settings. Somnoire does not silently switch to another one. closing the dashboard and settings ends full-readings access while enabled percentage monitoring continues.
+- **optional full readings:** one-time account-ID setup unlocks live telemetry and device settings. access is remembered in local Keychain; returning to percentage-only mode preserves it. Forget removes this Mac’s saved access without unbinding or resetting the bank.
+- **a simple dashboard:** Quit and the settings gear keep the panel uncluttered. find monitoring, bank selection, Forget, setup, and Retry in general settings; reopen the welcome guide there anytime.
+- **about and updates:** see the app version and open GitHub Releases with Check for Updates. it opens your browser, rather than installing updates automatically. diagnostics remain hidden behind thirteen clicks on the app icon in about.
 
 ## meet NouNou
 
@@ -71,7 +115,7 @@ use the dashboard’s gear to open settings. forget bank removes remembered acce
 
 - **published release:** [v1.0.0](https://github.com/Kusanalee/Somnoire/releases/tag/v1.0.0), with a universal app ZIP and SHA-256 checksums.
 - **Mac:** macOS 13 or later, on Apple silicon or Intel. not every supported macOS version has been tested on hardware.
-- **verified bank:** EcoFlow RAPID Pro 27,650 mAh, P512. other models and firmware are unverified.
+- **verified bank:** **EcoFlow Rapid Pro 27,650 mAh** (internal model **P512**). it may work on other models, but they are untested; other firmware is also unverified.
 - **signing:** v1.0.0 uses a reusable local signing certificate and is **not Apple-notarized**. it is not a Developer ID release; macOS may block its first launch.
 
 [building instructions](docs/building.md) explain the local signer and build requirements; Xcode with Swift 6 support is required. the maintainer’s signing key is not included.
