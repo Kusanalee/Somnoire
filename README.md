@@ -118,6 +118,12 @@ use the dashboard’s gear to open settings. forget bank removes remembered acce
 - **verified bank:** **EcoFlow Rapid Pro 27,650 mAh** (internal model **P512**). it may work on other models, but they are untested; other firmware is also unverified.
 - **signing:** v1.0.0 uses a reusable local signing certificate and is **not Apple-notarized**. it is not a Developer ID release; macOS may block its first launch.
 
+### if Apple cannot verify the app
+
+Somnoire is not notarized. **only consider opening a blocked copy if you downloaded it directly from [this repository’s Releases page](https://github.com/Kusanalee/Somnoire/releases) and trust it.** do not use these steps for mirrors or reuploads.
+
+follow the [step-by-step macOS opening guide](docs/installation.md#if-apple-cannot-verify-somnoire): try opening Somnoire, then use **System Settings → Privacy & Security → Open Anyway** for that app and review the confirmation. this is a per-app exception, not notarization or a safety guarantee. do not override malware/damage warnings or disable Gatekeeper globally.
+
 [building instructions](docs/building.md) explain the local signer and build requirements; Xcode with Swift 6 support is required. the maintainer’s signing key is not included.
 
 ## a local little companion

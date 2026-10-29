@@ -37,9 +37,24 @@ Somnoire normally lives in the menu bar. its Dock icon appears while onboarding,
 
 Somnoire is **not Apple-notarized**. version 1.0.0 uses a reusable local signing certificate. local signing is not Developer ID signing and does not guarantee Gatekeeper approval.
 
-if macOS blocks the app, verify that you downloaded it from this repository’s release page. if you trust that copy and macOS offers an **Open Anyway** option in System Settings → Privacy & Security, review and complete that confirmation yourself. the exact wording varies by macOS version. do not disable Gatekeeper system-wide or remove quarantine as a routine installation step. stop if the warning reports malware, a damaged app, or the file does not match the expected download.
+### if Apple cannot verify Somnoire
 
-if no supported opening option is offered, use the [source-build guide](building.md) or report the exact warning rather than bypassing it. the current source-build script requires a local signing identity; the maintainer’s private key is not included.
+macOS may say that Apple could not verify Somnoire is free of malware, or that its developer cannot be verified. Somnoire is locally signed but has not been submitted to Apple for notarization.
+
+> **only follow these steps for a copy downloaded directly from [Kusanalee/Somnoire Releases](https://github.com/Kusanalee/Somnoire/releases), and only if you trust it. do not use this guide for third-party reuploads, mirrors, or files sent by someone else.** you can compare the ZIP’s SHA-256 with the checksum on that same release page before opening it.
+
+1. in Finder, try opening `Somnoire.app` once. if macOS blocks it, dismiss the warning without moving the app to Trash.
+2. open **System Settings → Privacy & Security**.
+3. scroll to the security section and find the notice about Somnoire being blocked. click **Open Anyway** for **Somnoire**.
+4. review the next confirmation, then choose **Open** if you still want to proceed. macOS may ask you to authenticate with your Mac password or Touch ID; do that in the system prompt, not in Somnoire or a message to anyone else.
+
+this creates an exception for this app; it does **not** notarize Somnoire or prove that a file is safe. it does not require turning off Gatekeeper for the rest of your Mac. the wording and available controls vary by macOS version and device-management policy.
+
+if Open Anyway is absent, try opening the app once more and check Privacy & Security again. on a managed Mac, ask your administrator if exceptions are restricted. do not disable Gatekeeper system-wide or use quarantine-removal commands as a routine workaround.
+
+**stop if macOS reports malware, damage, tampering, or a checksum mismatch.** this guide is for the unidentified-developer/notarization warning, not those alerts. download a fresh copy from this repository or report the exact message if you are unsure.
+
+see [Apple’s guide to opening apps safely](https://support.apple.com/en-us/102445). if no supported opening option is offered, consult the [source-build guide](building.md); the maintainer’s signing key is not included.
 
 ## 4. allow Bluetooth and choose your bank
 
