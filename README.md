@@ -12,7 +12,7 @@ Somnoire is a lightweight, native macOS menu bar app for keeping an eye on suppo
   <img src="assets/readme/dashboard.png" width="328" alt="real Somnoire dashboard showing battery percentage, input and output power, four USB-C port cards, and expanded battery information">
 </p>
 
-*an actual dashboard capture, separate from the illustrated banner above. this development-build screenshot predates the removal of the connected label and gear dropdown.*
+*the real dashboard, with live readings and expanded battery information.*
 
 <details>
 <summary>a look inside settings</summary>
