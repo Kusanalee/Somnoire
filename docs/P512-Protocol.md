@@ -722,3 +722,18 @@ successful container import.
 The accessible sfltool startup-registration output contained no Somnoire entry;
 the new installation's Launch at Login checkbox was off. No startup item was
 registered or removed during this upgrade.
+
+## 1.0.0 release validation
+
+Version 1.0.0, build 25 packages the previously verified app behavior under the
+persistent Kusanalee signing identity. build/release-1.0.0-tests.log records 121
+executed tests, seven opt-in hardware checks skipped, zero failures (114 passed).
+Two Python preference-migration checks also pass. Universal Debug and Release
+architectures are arm64/x86_64. build/release-1.0.0-build.log records the Release
+build. The universal ZIP was extracted and verified with codesign --deep --strict;
+version, build, identifier, compiled icon metadata and sandbox/Bluetooth-only
+entitlements were checked. No private key material is included. The app remains
+locally certificate-signed, without Developer ID or Apple notarization.
+ZIP SHA-256: 9fe104fb69fea0932178d92baf9ae2efc9b46d965d2a27233587629c0c3f5b6c.
+Live Bluetooth/notification/Keychain observations remain those of builds 23–24;
+no new device writes or hardware claims were introduced by this release step.

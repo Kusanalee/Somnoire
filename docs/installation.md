@@ -6,21 +6,21 @@ a small setup now, a quieter menu bar afterward.
 
 - a Mac running **macOS 13 or later**, with Bluetooth available. the app is built for both Apple silicon and Intel; not every supported macOS version has been hardware-tested.
 - a supported power bank: the tested model is the **EcoFlow RAPID Pro 27,650 mAh (P512)**. other models and firmware are unverified.
-- for full readings and device settings, access to the bank’s existing authorizing EcoFlow account. percentage-only monitoring in the upcoming version needs no account.
+- for full readings and device settings, access to the bank’s existing authorizing EcoFlow account. percentage-only monitoring needs no account.
 
-**release status:** `v0.11.0` is currently the published prerelease. `1.0.0` is the planned release of the newer version described by the README; it is not available to download yet. use each release’s notes to check which features it includes.
+**current release:** [Somnoire 1.0.0](https://github.com/Kusanalee/Somnoire/releases/tag/v1.0.0). the older `v0.11.0` prerelease remains available for reference; its interface and feature set differ.
 
 ## 1. download the app
 
 open [Somnoire’s GitHub Releases](https://github.com/Kusanalee/Somnoire/releases) and choose a published release. under assets, download its macOS universal app ZIP—not the automatically generated source-code archive.
 
-for the current prerelease, the file is `somnoire-0.11.0-macos-universal.zip`. a universal app contains both Apple silicon and Intel versions; there is no separate download to choose between them.
+for 1.0.0, the file is `somnoire-1.0.0-macos-universal.zip`. a universal app contains both Apple silicon and Intel versions; there is no separate download to choose between them.
 
 if checksums are supplied, you can optionally check the downloaded file in Terminal:
 
 ```sh
 cd ~/Downloads
-shasum -a 256 somnoire-0.11.0-macos-universal.zip
+shasum -a 256 somnoire-1.0.0-macos-universal.zip
 ```
 
 compare the result with that release’s `sha256sums.txt`. for future releases, use their actual ZIP filename and checksums rather than the example above.
@@ -28,14 +28,14 @@ compare the result with that release’s `sha256sums.txt`. for future releases, 
 ## 2. move Somnoire into Applications
 
 1. double-click the ZIP in Finder to extract it.
-2. move `Somnoire.app` into Applications. for the current personal build, use your home folder’s `Applications` folder (`~/Applications`) to keep one stable installation location.
+2. move `Somnoire.app` into Applications. for a per-user installation, use your home folder’s `Applications` folder (`~/Applications`) to keep one stable installation location.
 3. open the copy in Applications. avoid running additional copies from Downloads or Xcode at the same time.
 
-Somnoire normally lives in the menu bar. in the development version, its Dock icon appears while onboarding, settings, or diagnostics windows are open; closing those windows leaves monitoring running.
+Somnoire normally lives in the menu bar. its Dock icon appears while onboarding, settings, or diagnostics windows are open; closing those windows leaves monitoring running.
 
 ## 3. first launch and macOS checks
 
-Somnoire is **not Apple-notarized**. the published prerelease is ad-hoc signed; the current personal build uses a reusable local certificate. local signing is not Developer ID signing and does not guarantee Gatekeeper approval.
+Somnoire is **not Apple-notarized**. version 1.0.0 uses a reusable local signing certificate. local signing is not Developer ID signing and does not guarantee Gatekeeper approval.
 
 if macOS blocks the app, verify that you downloaded it from this repository’s release page. if you trust that copy and macOS offers an **Open Anyway** option in System Settings → Privacy & Security, review and complete that confirmation yourself. the exact wording varies by macOS version. do not disable Gatekeeper system-wide or remove quarantine as a routine installation step. stop if the warning reports malware, a damaged app, or the file does not match the expected download.
 
@@ -44,7 +44,7 @@ if no supported opening option is offered, use the [source-build guide](building
 ## 4. allow Bluetooth and choose your bank
 
 1. keep the bank awake and nearby, and turn on Bluetooth on your Mac.
-2. open Somnoire and follow the welcome guide in the upcoming version. the older `v0.11.0` prerelease uses settings → general instead.
+2. open Somnoire and follow the welcome guide. the older `v0.11.0` prerelease uses settings → general instead.
 3. allow Bluetooth when macOS asks. if you previously denied it, check System Settings → Privacy & Security → Bluetooth and enable Somnoire there.
 4. find and select your bank. if the official EcoFlow app is holding its Bluetooth connection, close that connection first.
 
@@ -52,7 +52,7 @@ Somnoire remembers the selected bank and does not silently switch to another. �
 
 ## 5. choose how much you want to see
 
-in the upcoming version, **battery percentage only** is the default. it needs no EcoFlow account and uses nearby battery advertisements. you can enable optional low-battery alerts separately in settings → alerts; macOS notification permission is requested when you enable them.
+**battery percentage only** is the default. it needs no EcoFlow account and uses nearby battery advertisements. you can enable optional low-battery alerts separately in settings → alerts; macOS notification permission is requested when you enable them.
 
 choose **full readings** for wattage, battery details, and charging/screen settings. this currently requires a one-time numeric EcoFlow account ID. use the bank’s existing authorizing account if already linked; do not reset or unbind it just to use Somnoire.
 

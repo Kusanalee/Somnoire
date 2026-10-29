@@ -4,7 +4,7 @@ Somnoire is a lightweight, native macOS menu bar app for keeping an eye on suppo
 
 [downloads](https://github.com/Kusanalee/Somnoire/releases) · [installation guide](docs/installation.md) · [getting started](#getting-started) · [account-id help](docs/first-time-setup.md) · [building](docs/building.md)
 
-> this page describes the current development version. the published **v0.11.0 prerelease** is older: guided onboarding, NouNou, alerts, and recent interface changes are not all included in that download. check the [release notes](https://github.com/Kusanalee/Somnoire/releases/tag/v0.11.0) before installing. **1.0.0 is the planned next release**, not a published download yet.
+> **Somnoire 1.0.0 is here.** [download the universal Mac app](https://github.com/Kusanalee/Somnoire/releases/tag/v1.0.0) or follow the [installation guide](docs/installation.md).
 
 ## a small window into your power bank
 
@@ -51,10 +51,10 @@ she follows fresh battery reports, including account-free Bluetooth advertisemen
 the [installation guide](docs/installation.md) covers first launch, macOS permissions, updates, and troubleshooting.
 
 1. grab the app from [GitHub Releases](https://github.com/Kusanalee/Somnoire/releases), unzip it, and move it to Applications. it isn’t Apple-notarized, so macOS may block the first launch; see the release’s instructions before proceeding.
-2. open Somnoire, allow Bluetooth access when prompted, and keep your supported bank awake and nearby. the development version’s welcome guide walks through setup; v0.11.0 uses settings → general.
+2. open Somnoire, allow Bluetooth access when prompted, and keep your supported bank awake and nearby. the welcome guide walks through setup.
 3. choose your bank and the experience you want. close the official EcoFlow app’s Bluetooth connection if it is holding the bank’s connection.
 
-| experience in the development version | account needed? |
+| experience | account needed? |
 | :-- | :-- |
 | **battery percentage only** — the default, with nearby battery monitoring and optional alerts | no |
 | **full readings** — wattage, battery information, and device settings | one-time setup with the bank’s authorizing EcoFlow account ID |
@@ -63,18 +63,18 @@ for full readings, enter **only the numeric account ID**, never your email, pass
 
 [the first-time setup guide](docs/first-time-setup.md) covers official-app setup, regional browser ID retrieval, connection handoff, and checking remembered access. the browser procedure is community-documented and varies by region; an ID is only confirmed when the bank accepts it.
 
-use the dashboard’s gear to open settings in the development version. forget bank removes remembered access from this Mac; it does not unbind or reset the bank.
+use the dashboard’s gear to open settings. forget bank removes remembered access from this Mac; it does not unbind or reset the bank.
 
 ## downloads and compatibility
 
 **[download Somnoire →](https://github.com/Kusanalee/Somnoire/releases)**
 
-- **published release:** [v0.11.0 · prerelease](https://github.com/Kusanalee/Somnoire/releases/tag/v0.11.0), with a universal app ZIP and SHA-256 checksums.
+- **published release:** [v1.0.0](https://github.com/Kusanalee/Somnoire/releases/tag/v1.0.0), with a universal app ZIP and SHA-256 checksums.
 - **Mac:** macOS 13 or later, on Apple silicon or Intel. not every supported macOS version has been tested on hardware.
 - **verified bank:** EcoFlow RAPID Pro 27,650 mAh, P512. other models and firmware are unverified.
-- **signing:** v0.11.0 is ad-hoc signed, **not Apple-notarized**. the current personal development build uses a reusable local signing certificate; it is also not notarized. neither is a Developer ID release.
+- **signing:** v1.0.0 uses a reusable local signing certificate and is **not Apple-notarized**. it is not a Developer ID release; macOS may block its first launch.
 
-current-source features shown here need a source build until a newer release is published. [building instructions](docs/building.md) explain the local signer and build requirements; Xcode with Swift 6 support is required. the maintainer’s signing key is not included.
+[building instructions](docs/building.md) explain the local signer and build requirements; Xcode with Swift 6 support is required. the maintainer’s signing key is not included.
 
 ## a local little companion
 
@@ -90,7 +90,7 @@ alerts are opt-in and silent. they need Somnoire running, monitoring enabled, an
 - Somnoire uses the clock artwork already installed on the bank. time setup, artwork changes, sharing, and firmware updates belong in the [official EcoFlow app](https://www.ecoflow.com/us/app-download). automatic local time sync and custom artwork upload are unavailable.
 - charging and screen controls have been user-tested, but physical charge/discharge cutoffs have not been independently validated. input-direction behavior and dock readings still have hardware-validation gaps.
 - three decimal places is a display preference, not a promise of greater accuracy. advertisements report whole percentages.
-- the personal development build retained Bluetooth permission across relaunches and a changed-build upgrade, and displayed the notification artwork on the test Mac. that isn’t a guarantee for every Mac or signing identity.
+- the tested local build retained Bluetooth permission across relaunches and a changed-build upgrade, and displayed the notification artwork on the test Mac. that isn’t a guarantee for every Mac or signing identity.
 
 ## under the moonlight, under the hood
 

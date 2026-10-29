@@ -1,6 +1,6 @@
 # first-time setup
 
-battery-percentage monitoring in the current development version needs no account. full readings and device settings currently need one-time EcoFlow account setup; everyday use then remains local over Bluetooth. account-free full access has not been established for the tested linked P512, rather than proven universally impossible.
+battery-percentage monitoring in Somnoire 1.0.0 needs no account. full readings and device settings currently need one-time EcoFlow account setup; everyday use then remains local over Bluetooth. account-free full access has not been established for the tested linked P512, rather than proven universally impossible.
 
 ## connect for full readings
 
@@ -27,6 +27,6 @@ there is no verified phone-app ID menu documented here. Somnoire does not perfor
 
 bank credentials are local, non-synchronizing Keychain entries. remembered access has been checked across quit/relaunch on the tested bank. switching to percentage-only mode preserves saved access while ending the live session. forget bank removes its saved access from this Mac, without changing the bank’s EcoFlow binding.
 
-the current personal build uses `io.github.kusanalee.Somnoire`. migrating from older builds may require a normal Keychain authorization prompt or one-time setup again; old data is retained if migration is blocked. the [build guide](building.md) documents this personal-machine transition and signing-key continuity.
+Somnoire 1.0.0 uses `io.github.kusanalee.Somnoire`. migrating from older builds may require a normal Keychain authorization prompt or one-time setup again; old data is retained if migration is blocked. the [build guide](building.md) documents this personal-machine transition and signing-key continuity.
 
 [back to Somnoire](../README.md)
