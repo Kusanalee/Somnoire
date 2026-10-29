@@ -117,3 +117,67 @@ struct BatteryOutcomeTracker {
     }
     mutating func clear() { outcomes.removeAll() }
 }
+
+enum AppMode: String, CaseIterable { case percentageOnly, fullReadings }
+struct BatteryPresentation {
+    var bank: UUID?
+    var percentage: Double?
+    var observedAt: Date?
+    var sampledAt: TimeInterval?
+    var source = "advertisement"
+    mutating func receive(bank: UUID, value: Double, date: Date, now: TimeInterval, source: String) {
+        guard value.isFinite, (0...100).contains(value) else { return }
+        self.bank = bank; percentage = value; observedAt = date; sampledAt = now; self.source = source
+    }
+    func fresh(now: TimeInterval, available: Bool) -> Bool { available && sampledAt.map { now - $0 < 30 } == true }
+    var text: String { formatted(precision: .whole) }
+    var alertPercentage: Int? { percentage.map { Int($0.rounded()) } }
+    func formatted(precision: PercentagePrecision, locale: Locale = .current) -> String {
+        guard let percentage else { return "—" }
+        return percentage.formatted(.number.locale(locale).grouping(.never).precision(.fractionLength(0...(source == "advertisement" ? 0 : precision.rawValue))).rounded(rule: .toNearestOrAwayFromZero)) + "%"
+    }
+}
+
+
+enum AppAppearance: String, CaseIterable { case system = "System", light = "Light", dark = "Dark" }
+enum MenuBarStyle: String, CaseIterable { case `default` = "Default", nouNou = "NouNou" }
+enum OnboardingStep: Int, CaseIterable { case welcome, experience, bank, access, ready }
+enum RelativeAge {
+    static func text(since date: Date, at now: Date) -> String {
+        let minutes = max(0, now.timeIntervalSince(date)) / 60
+        if minutes < 10 { return "recently" }
+        if minutes >= 60 { return "a long time ago" }
+        return "\(Int(minutes / 5) * 5) minutes ago"
+    }
+}
+struct DiagnosticsUnlock {
+    private(set) var count = 0
+    var unlocked: Bool { count >= 13 }
+    mutating func activate() -> Bool {
+        guard !unlocked else { return false }
+        count += 1; return unlocked
+    }
+}
+
+extension OnboardingStep {
+    func next(mode: AppMode) -> OnboardingStep {
+        switch self {
+        case .welcome: return .experience
+        case .experience: return .bank
+        case .bank: return mode == .percentageOnly ? .ready : .access
+        case .access, .ready: return .ready
+        }
+    }
+    func previous(mode: AppMode) -> OnboardingStep {
+        self == .ready && mode == .percentageOnly ? .bank : OnboardingStep(rawValue: max(0, rawValue - 1)) ?? .welcome
+    }
+    func canAdvance(hasBank: Bool, live: Bool) -> Bool {
+        switch self { case .bank: return hasBank; case .access: return live; default: return true }
+    }
+}
+
+
+enum PercentagePrecision: Int, CaseIterable {
+    case whole = 0, one, two, three
+    static func saved(_ value: Int) -> Self { Self(rawValue: value) ?? .whole }
+}

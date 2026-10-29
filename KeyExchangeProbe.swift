@@ -169,10 +169,19 @@ final class ProbeCredential {
         if pointer == nil { return nil }
     }
     private init(pointer: OpaquePointer) { self.pointer = pointer }
-    static func load(bank: UUID) -> ProbeCredential? {
-        guard let pointer = bank.uuidString.withCString({ sn_probe_credential_load($0) }) else { return nil }
-        return ProbeCredential(pointer: pointer)
+    enum LoadFailure: Error { case missing, deniedOrLocked, malformed, saveFailed, unavailable }
+    static func loadResult(bank: UUID) -> Result<ProbeCredential, LoadFailure> {
+        var status: Int32 = 0
+        if let pointer = bank.uuidString.withCString({ sn_probe_credential_load_status($0, &status) }) { return .success(ProbeCredential(pointer: pointer)) }
+        switch status {
+        case -25300: return .failure(.missing)
+        case -25293, -25308, -128: return .failure(.deniedOrLocked)
+        case -26275: return .failure(.malformed)
+        case 1001: return .failure(.saveFailed)
+        default: return .failure(.unavailable)
+        }
     }
+    static func load(bank: UUID) -> ProbeCredential? { try? loadResult(bank: bank).get() }
     func save(bank: UUID) -> Bool {
         bank.uuidString.withCString { sn_probe_credential_save($0, pointer) != 0 }
     }
@@ -332,6 +341,12 @@ final class NativeProbeCrypto: ProbeCryptography {
     }
     func healthyRequest(_ change: HealthyChange, sequence: UInt32) throws -> Data {
         guard change.valid, let pointer = storage.pointer else { throw ProbeFailure.invalidStatus }
+        if let clock = change.clock {
+            var bytes = [UInt8](repeating: 0, count: 256), count = 0
+            let success = clock.zone.withCString { sn_probe_clock_request(pointer, sequence, clock.utc, clock.offset, $0, &bytes, bytes.count, &count) }
+            guard success == 1 else { throw ProbeFailure.writeRejected }
+            return Data(bytes.prefix(count))
+        }
         var bytes = [UInt8](repeating: 0, count: 32)
         if let (field, value) = change.screen.first {
             guard sn_probe_screen_request(pointer, sequence, field.writeField, value, &bytes) == 1 else { throw ProbeFailure.writeRejected }
@@ -439,18 +454,21 @@ final class KeyExchangeProbe {
     private var settingsReadback = HealthySettings()
     private var settingsCompletion: ((Bool) -> Void)?
     private var settingsSequence: UInt32 = 3
+    var onClockSync: ((ClockSyncOutcome) -> Void)?
     func applyHealthy(_ change: HealthyChange, completion: @escaping (Bool) -> Void) {
-        guard live, isActive, stage == .observing, access?.credentialAccepted == true, settingsID == nil, change.valid, settingsSequence < UInt32.max, let crypto else { completion(false); return }
+        guard live, isActive, stage == .observing, access?.credentialAccepted == true, settingsID == nil, change.valid, settingsSequence < UInt32.max, let crypto else { if change.clock != nil { onClockSync?(.refused) }; completion(false); return }
         do {
             let bytes = try crypto.healthyRequest(change, sequence: settingsSequence); settingsSequence += 1
             settingsExpectedMode = change.mode ?? access?.latestDelta?.healthyMode
             settingsChange = change; settingsCompletion = completion; settingsPhase = 1
             settingsDeadline = now() + 3; settingsID = UUID()
             onAction?(.write(settingsID!, ProbeFrameCodec.encode(bytes, encrypted: true))); onChange?()
-        } catch { completion(false) }
+        } catch { if change.clock != nil { onClockSync?(.refused) }; completion(false) }
     }
+    func cancelPaneSettings() { if settingsChange?.clock == nil { cancelSettings() } }
     func cancelSettings() { finishSettings(false) }
-    private func finishSettings(_ confirmed: Bool) {
+    private func finishSettings(_ confirmed: Bool, clockOutcome: ClockSyncOutcome? = nil) {
+        if settingsChange?.clock != nil { onClockSync?(clockOutcome ?? (confirmed ? .confirmed : .cancelled)) }
         let callback = settingsCompletion
         settingsCompletion = nil; settingsID = nil; settingsDeadline = nil; settingsChange = nil; settingsPhase = 0
         callback?(confirmed); onChange?()
@@ -496,12 +514,13 @@ final class KeyExchangeProbe {
     }
     func writeCompleted(_ id: UUID, success: Bool) {
         if isActive, settingsID == id {
-            guard success else { finishSettings(false); return }
+            guard success else { finishSettings(false, clockOutcome: .transportFailure); return }
             if settingsPhase == 1 {
+                if settingsChange?.clock != nil { onClockSync?(.sent) }
                 do {
                     let bytes = try crypto!.displayRequest(); settingsPhase = 2; settingsID = UUID(); settingsDeadline = now() + 3
                     onAction?(.write(settingsID!, ProbeFrameCodec.encode(bytes, encrypted: true)))
-                } catch { finishSettings(false) }
+                } catch { finishSettings(false, clockOutcome: .transportFailure) }
             } else { settingsPhase = 3; settingsReadback = HealthySettings(); settingsDeadline = now() + 5 }
             onChange?(); return
         }
@@ -662,7 +681,7 @@ final class KeyExchangeProbe {
         lastUpload = now(); onTelemetry?(delta)
         if settingsPhase == 3, let change = settingsChange {
             settingsReadback.receive(delta)
-            if (change.screen.isEmpty ? settingsReadback.valid && settingsReadback.mode == settingsExpectedMode : true) && settingsReadback.matches(change) { finishSettings(true) }
+            if (change.screen.isEmpty && change.clock == nil ? settingsReadback.valid && settingsReadback.mode == settingsExpectedMode : true) && settingsReadback.matches(change) { finishSettings(true) }
         }
 
         if live { onChange?() }
@@ -676,7 +695,10 @@ final class KeyExchangeProbe {
         stage = next; stageStartedAt = now(); onChange?()
     }
     private func checkDeadline() -> Bool {
-        if let deadline = settingsDeadline, now() >= deadline { finishSettings(false) }
+        if let deadline = settingsDeadline, now() >= deadline {
+            let outcome = settingsChange?.clock.map { settingsPhase == 3 ? settingsReadback.timezone.outcome(for: $0) : .transportFailure }
+            finishSettings(false, clockOutcome: outcome)
+        }
         guard let startedAt else { return false }
         if live && stage == .observing {
             if now() >= (lastUpload ?? stageStartedAt) + 15 { fail(.stageTimeout); return false }
@@ -711,12 +733,19 @@ final class KeyExchangeProbe {
 
 @MainActor
 protocol BankCredentialStore {
+    func loadResult(bank: UUID) -> Result<ProbeCredential, ProbeCredential.LoadFailure>
     func load(bank: UUID) -> ProbeCredential?
     func save(_ credential: ProbeCredential, bank: UUID) -> Bool
     func forget(bank: UUID) -> Bool
 }
+extension BankCredentialStore {
+    func loadResult(bank: UUID) -> Result<ProbeCredential, ProbeCredential.LoadFailure> {
+        load(bank: bank).map { .success($0) } ?? .failure(.missing)
+    }
+}
 @MainActor
 struct KeychainBankCredentialStore: BankCredentialStore {
+    func loadResult(bank: UUID) -> Result<ProbeCredential, ProbeCredential.LoadFailure> { ProbeCredential.loadResult(bank: bank) }
     func load(bank: UUID) -> ProbeCredential? { ProbeCredential.load(bank: bank) }
     func save(_ credential: ProbeCredential, bank: UUID) -> Bool { credential.save(bank: bank) }
     func forget(bank: UUID) -> Bool { ProbeCredential.forget(bank: bank) }

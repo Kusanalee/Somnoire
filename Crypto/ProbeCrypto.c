@@ -272,9 +272,9 @@ int sn_probe_screen_request(SNProbeCrypto *c, uint32_t seq, uint32_t field, uint
     int valid=0;
     switch(field) {
     case 14: valid=value<=100; break;
-    case 301: case 304: case 306: valid=value==1 || value==2; break;
+    case 304: case 306: valid=value==1 || value==2; break;
     case 554: if(value==UINT32_MAX) { valid=1; break; }
-    case 12: case 302: case 305: valid=value==30 || value==60 || value==300 || value==600 || value==1800 || value==3600; break;
+    case 12: case 305: valid=value==30 || value==60 || value==300 || value==600 || value==1800 || value==3600; break;
     default: return 0;
     }
     if(!valid || !c || !c->credential_authenticated || seq<3) return 0;
@@ -422,45 +422,140 @@ int sn_probe_test_shared(const uint8_t private_key[21], const uint8_t peer[40], 
 }
 #endif
 
-static CFMutableDictionaryRef credential_query(const char *bank) {
+#ifdef DEBUG
+static OSStatus (*credentialCopy)(CFDictionaryRef, CFTypeRef *) = SecItemCopyMatching;
+static OSStatus (*credentialUpdate)(CFDictionaryRef, CFDictionaryRef) = SecItemUpdate;
+static OSStatus (*credentialAdd)(CFDictionaryRef, CFTypeRef *) = SecItemAdd;
+static OSStatus (*credentialDelete)(CFDictionaryRef) = SecItemDelete;
+#else
+#define credentialCopy SecItemCopyMatching
+#define credentialUpdate SecItemUpdate
+#define credentialAdd SecItemAdd
+#define credentialDelete SecItemDelete
+#endif
+static CFMutableDictionaryRef credential_query(const char *bank, CFStringRef service) {
     if (!bank) return NULL;
     CFStringRef account = CFStringCreateWithCString(NULL, bank, kCFStringEncodingUTF8);
     if (!account) return NULL;
     CFMutableDictionaryRef q = CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
     CFDictionarySetValue(q, kSecClass, kSecClassGenericPassword);
-    CFDictionarySetValue(q, kSecAttrService, CFSTR("org.somnoire.bank-credential"));
+    CFDictionarySetValue(q, kSecAttrService, service);
     CFDictionarySetValue(q, kSecAttrAccount, account); CFRelease(account);
     CFDictionarySetValue(q, kSecAttrSynchronizable, kCFBooleanFalse);
     return q;
 }
-SNProbeCredential *sn_probe_credential_load(const char *bank) {
-    CFMutableDictionaryRef q = credential_query(bank); if (!q) return NULL;
+static SNProbeCredential *credential_load_service(const char *bank, CFStringRef service, int32_t *out_status) {
+    CFMutableDictionaryRef q = credential_query(bank, service); if (!q) { *out_status = errSecParam; return NULL; }
     CFDictionarySetValue(q, kSecReturnData, kCFBooleanTrue);
-    CFTypeRef result = NULL; OSStatus status = SecItemCopyMatching(q, &result); CFRelease(q);
+    CFTypeRef result = NULL; OSStatus status = credentialCopy(q, &result); CFRelease(q);
     SNProbeCredential *credential = NULL;
     if (status == errSecSuccess && result && CFGetTypeID(result) == CFDataGetTypeID() && CFDataGetLength(result) == 32) {
         credential = calloc(1, sizeof(*credential));
         if (credential) memcpy(credential->token, CFDataGetBytePtr(result), 32);
     }
+    if (status == errSecSuccess && !credential) status = errSecDecode;
+    *out_status = status;
     if (result) CFRelease(result); return credential;
 }
 int sn_probe_credential_save(const char *bank, const SNProbeCredential *credential) {
     if (!credential) return 0;
-    CFMutableDictionaryRef q = credential_query(bank); if (!q) return 0;
+    CFMutableDictionaryRef q = credential_query(bank, CFSTR("io.github.kusanalee.Somnoire.bank-credential")); if (!q) return 0;
     CFDataRef data = CFDataCreate(NULL, credential->token, 32);
     CFMutableDictionaryRef attrs = CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
     CFDictionarySetValue(attrs, kSecValueData, data);
     CFDictionarySetValue(attrs, kSecAttrAccessible, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly);
-    OSStatus status = SecItemUpdate(q, attrs);
+    OSStatus status = credentialUpdate(q, attrs);
     if (status == errSecItemNotFound) {
         CFDictionarySetValue(q, kSecValueData, data);
         CFDictionarySetValue(q, kSecAttrAccessible, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly);
-        status = SecItemAdd(q, NULL);
+        status = credentialAdd(q, NULL);
     }
     CFRelease(attrs); CFRelease(data); CFRelease(q); return status == errSecSuccess;
 }
-int sn_probe_credential_forget(const char *bank) {
-    CFMutableDictionaryRef q = credential_query(bank); if (!q) return 0;
-    OSStatus status = SecItemDelete(q); CFRelease(q);
-    return status == errSecSuccess || status == errSecItemNotFound;
+SNProbeCredential *sn_probe_credential_load_status(const char *bank, int32_t *status) {
+    SNProbeCredential *credential = credential_load_service(bank, CFSTR("io.github.kusanalee.Somnoire.bank-credential"), status);
+    if (*status != errSecItemNotFound) return credential;
+    credential = credential_load_service(bank, CFSTR("org.somnoire.bank-credential"), status);
+    if (credential && !sn_probe_credential_save(bank, credential)) {
+        sn_probe_credential_destroy(credential); *status = 1001; return NULL;
+    }
+    return credential;
 }
+SNProbeCredential *sn_probe_credential_load(const char *bank) {
+    int32_t status; return sn_probe_credential_load_status(bank, &status);
+}
+int sn_probe_credential_forget(const char *bank) {
+    int success = 1;
+    CFStringRef services[] = {CFSTR("io.github.kusanalee.Somnoire.bank-credential"), CFSTR("org.somnoire.bank-credential")};
+    for (size_t i = 0; i < 2; i++) {
+        CFMutableDictionaryRef q = credential_query(bank, services[i]); if (!q) return 0;
+        OSStatus status = credentialDelete(q); CFRelease(q);
+        if (status != errSecSuccess && status != errSecItemNotFound) success = 0;
+    }
+    return success;
+}
+
+static void clock_varint(uint8_t *p, size_t *n, uint64_t v) {
+    do { uint8_t b=v&127; v>>=7; p[(*n)++]=b|(v?128:0); } while(v);
+}
+int sn_probe_clock_request(SNProbeCrypto *c, uint32_t seq, uint32_t utc, int32_t offset, const char *zone, uint8_t *out, size_t capacity, size_t *written) {
+    if(written) *written=0;
+    if(!out || capacity!=256) return 0;
+    wipe(out,capacity);
+    if(!c || !c->credential_authenticated || seq<3 || !zone || !written || offset < -1200 || offset > 1400 || offset%100) return 0;
+    size_t len=strnlen(zone,129); if(!len || len>128) return 0;
+    for(size_t i=0;i<len;i++) if((unsigned char)zone[i]<33 || (unsigned char)zone[i]>126) return 0;
+    uint8_t p[256]={0xaa,3,0,0,0,13,0,0,0,0,0,0,33,2,1,1,254,17}; size_t n=18;
+    clock_varint(p,&n,6<<3); clock_varint(p,&n,utc);
+    clock_varint(p,&n,7<<3); clock_varint(p,&n,(uint64_t)(int64_t)offset);
+    clock_varint(p,&n,(135<<3)|2); clock_varint(p,&n,len); memcpy(p+n,zone,len); n+=len;
+    clock_varint(p,&n,136<<3); clock_varint(p,&n,1);
+    p[2]=(uint8_t)(n-18); p[4]=crc8(p,4);
+    for(unsigned i=0;i<4;i++) p[6+i]=(uint8_t)(seq>>(i*8));
+    uint16_t crc=crc16(p,n); p[n++]=crc&255; p[n++]=crc>>8;
+    CCCryptorStatus status=CCCrypt(kCCEncrypt,kCCAlgorithmAES,kCCOptionPKCS7Padding,c->key,sizeof(c->key),c->iv,p,n,out,capacity,written);
+    wipe(p,sizeof(p)); if(status!=kCCSuccess) { wipe(out,capacity); *written=0; return 0; } return 1;
+}
+
+#ifdef DEBUG
+static int migrationScenario, migrationCopies, migrationWrites, migrationDeletes;
+static OSStatus migration_copy(CFDictionaryRef query, CFTypeRef *result) {
+    migrationCopies++;
+    int legacy = CFEqual(CFDictionaryGetValue(query, kSecAttrService), CFSTR("org.somnoire.bank-credential"));
+    if (migrationScenario == 2) return errSecAuthFailed;
+    if (!legacy && migrationScenario != 0) return errSecItemNotFound;
+    if (migrationScenario == 3) return errSecInteractionNotAllowed;
+    uint8_t bytes[32] = {0};
+    *result = CFDataCreate(NULL, bytes, migrationScenario == 4 ? 31 : 32);
+    return errSecSuccess;
+}
+static OSStatus migration_update(CFDictionaryRef query, CFDictionaryRef values) {
+    migrationWrites++; return migrationScenario == 5 ? errSecAuthFailed : errSecItemNotFound;
+}
+static OSStatus migration_add(CFDictionaryRef query, CFTypeRef *result) { migrationWrites++; return errSecSuccess; }
+static OSStatus migration_delete(CFDictionaryRef query) { migrationDeletes++; return migrationScenario == 7 ? errSecAuthFailed : errSecSuccess; }
+int sn_probe_test_credential_migration(int scenario) {
+    migrationScenario = scenario; migrationCopies = migrationWrites = migrationDeletes = 0;
+    credentialCopy = migration_copy; credentialUpdate = migration_update; credentialAdd = migration_add; credentialDelete = migration_delete;
+    int ok = 0;
+    if (scenario >= 6) {
+        int deleted = sn_probe_credential_forget("synthetic-bank");
+        ok = migrationDeletes == 2 && deleted == (scenario == 6);
+    } else {
+        int32_t status = 0;
+        SNProbeCredential *value = sn_probe_credential_load_status("synthetic-bank", &status);
+        switch (scenario) {
+        case 0: ok = value && status == 0 && migrationCopies == 1 && migrationWrites == 0; break;
+        case 1: ok = value && status == 0 && migrationCopies == 2 && migrationWrites == 2; break;
+        case 2: ok = !value && status == errSecAuthFailed && migrationCopies == 1 && !migrationWrites; break;
+        case 3: ok = !value && status == errSecInteractionNotAllowed && !migrationWrites; break;
+        case 4: ok = !value && status == errSecDecode && !migrationWrites; break;
+        case 5: ok = !value && status == 1001 && migrationWrites == 1; break;
+        }
+        ok = ok && migrationDeletes == 0;
+        sn_probe_credential_destroy(value);
+    }
+    credentialCopy = SecItemCopyMatching; credentialUpdate = SecItemUpdate; credentialAdd = SecItemAdd; credentialDelete = SecItemDelete;
+    return ok;
+}
+#endif

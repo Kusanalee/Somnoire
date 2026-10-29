@@ -261,6 +261,18 @@
           "telemetry": ""
         }
       ],
+      "clock_cases": [
+        {
+          "offset": 800,
+          "zone": "Asia/Manila",
+          "ciphertext": "1b25e1f7d38f81911b845aaff27b2779bb8a633426b75553a43d44f4a5774c22e24396ee8c230917d80696953739aaf5"
+        },
+        {
+          "offset": -500,
+          "zone": "America/New_York",
+          "ciphertext": "a2f6811d10f4d358cbe8a9958f7bff9f5c34af0cc269233ef3111b3ac4197837a135817d3bfca0b5f8eedea55ebc14ffa68d8858d9df423387557929ec45a7c2"
+        }
+      ],
       "screen_cases": [
         {
           "field": 12,
@@ -281,16 +293,6 @@
           "field": 14,
           "value": 100,
           "ciphertext": "a9ac6ce216d1200971868e3089c7bc3764169fcc590730736164bd918a1ffd04"
-        },
-        {
-          "field": 301,
-          "value": 1,
-          "ciphertext": "6605a37d0f3233d0a59e0f5db5485db61be4d931d014b67b1cf0af9593d95cf3"
-        },
-        {
-          "field": 302,
-          "value": 300,
-          "ciphertext": "c5cc85ff1e43e91fd15dd25b38eb6f77be6af1d2529c48a0e24ccabeb5ec9373"
         },
         {
           "field": 304,
@@ -906,6 +908,18 @@
           "telemetry": ""
         }
       ],
+      "clock_cases": [
+        {
+          "offset": 800,
+          "zone": "Asia/Manila",
+          "ciphertext": "eeb689cf870c251aeffd806fd64dd44c9ce2bea502c4df3445cfc2b753684b47204c00cd97d251d46ebf5aee0a26db59"
+        },
+        {
+          "offset": -500,
+          "zone": "America/New_York",
+          "ciphertext": "7969bc77a985403376d6e151e2711cee7f310f87e5255f6a73f3d2ab2c183ede86c041f2f85c52efce8743ce1a855131b2e3a4961f7c7a7779a741e42c09386d"
+        }
+      ],
       "screen_cases": [
         {
           "field": 12,
@@ -926,16 +940,6 @@
           "field": 14,
           "value": 100,
           "ciphertext": "4327f5cb5d1904b3b861da2b458d7e7b0bcf3f04b64fc5313c07322c402e7ddd"
-        },
-        {
-          "field": 301,
-          "value": 1,
-          "ciphertext": "0b1fc8b7e0804de996f191d0171f3b44a651ec908e442cff410192c6dab9caa3"
-        },
-        {
-          "field": 302,
-          "value": 300,
-          "ciphertext": "fbf5d58bd45d516ed28d74a6943dca2bd03d808afaea7ba9ec264a361d34cf9d"
         },
         {
           "field": 304,

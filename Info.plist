@@ -8,7 +8,7 @@
 <key>CFBundleName</key><string>Somnoire</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>0.11.0</string>
-<key>CFBundleVersion</key><string>20</string>
+<key>CFBundleVersion</key><string>24</string>
 <key>LSMinimumSystemVersion</key><string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 <key>LSUIElement</key><true/>
 <key>NSBluetoothAlwaysUsageDescription</key><string>Somnoire uses Bluetooth to discover nearby devices and inspect their exposed services locally. No account or cloud connection is needed.</string>

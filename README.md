@@ -1,64 +1,115 @@
-# somnoire
+![illustrated Somnoire banner with Phrolova-inspired characters](assets/readme/somnoire-banner.png)
 
-a small macos menu bar app for the ecoflow rapid pro 27,650mah power bank.
+Somnoire is a lightweight, native macOS menu bar app for keeping an eye on supported EcoFlow power banks and managing their settings locally over Bluetooth. check your battery at a glance, peek at the power flowing through each port, then let it settle back into the menu bar.
 
-check your battery, see what each usb-c port is doing, and adjust charging and screen settings without keeping the official app open.
+[downloads](https://github.com/Kusanalee/Somnoire/releases) · [installation guide](docs/installation.md) · [getting started](#getting-started) · [account-id help](docs/first-time-setup.md) · [building](docs/building.md)
 
-named after the location in wuthering waves. an independent project, unaffiliated with ecoflow.
+> this page describes the current development version. the published **v0.11.0 prerelease** is older: guided onboarding, NouNou, alerts, and recent interface changes are not all included in that download. check the [release notes](https://github.com/Kusanalee/Somnoire/releases/tag/v0.11.0) before installing. **1.0.0 is the planned next release**, not a published download yet.
 
-## what it does
+## a small window into your power bank
 
-- shows the battery percentage in your menu bar
-- displays live input and output power for all four usb-c ports
-- shows battery health, cycles, temperature, and total energy in and out
-- lets you adjust healthy charging, charge limits, and discharge reserve
-- controls screen brightness, display duration, and clock settings
-- remembers your power bank securely and can launch at login
+<p align="center">
+  <img src="assets/readme/dashboard.png" width="328" alt="real Somnoire dashboard showing battery percentage, input and output power, four USB-C port cards, and expanded battery information">
+</p>
+
+*an actual dashboard capture, separate from the illustrated banner above. this development-build screenshot predates the removal of the connected label and gear dropdown.*
+
+<details>
+<summary>a look inside settings</summary>
+
+![real Somnoire settings window showing its native sidebar and about pane](assets/readme/settings.png)
+
+*a real development-build capture. the current app places about last in the sidebar and includes a check for updates button.*
+
+</details>
+
+## quietly useful
+
+| | a little less checking, a little more knowing |
+| :-- | :-- |
+| **battery at a glance** | keep the percentage in your menu bar. optional low-battery alerts offer a quiet nudge, with thresholds from 10% to 30%. |
+| **follow the flow** | full readings show input and output wattage, four USB-C port cards, and expandable battery health, cycles, temperature, and lifetime energy totals. |
+| **make a few adjustments** | change healthy charging, charge limits, discharge reserve, brightness, display duration, and the existing clock’s display options. apply sends edits; revert discards them. |
+| **nearby, over Bluetooth** | remember one selected bank. basic percentage monitoring continues while the app runs; the live connection ends when its dashboard and settings close. |
+| **your Mac, your preferences** | choose System, Light, or Dark appearance, units, optional launch at login, and up to three percentage decimal places when the bank reports fractions. |
+
+missing power readings stay as dashes. the last verified battery percentage stays visible when stale, dimmed with a last-seen label. opening a panel doesn’t make old data fresh.
+
+## meet NouNou
+
+an optional, Phrolova-inspired little companion for the menu bar. switch between **Default** and **NouNou** in general settings.
+
+| sleepy NouNou | awake NouNou |
+| :--: | :--: |
+| ![sleepy NouNou menu bar artwork](Resources/NouNouSleepy@2x.png) | ![awake NouNou menu bar artwork](Resources/NouNouAwake@2x.png) |
+| disconnected, stale, or unavailable | connected / a fresh battery reading |
+
+she follows fresh battery reports, including account-free Bluetooth advertisements—an authenticated connection isn’t needed just to wake her up.
 
 ## getting started
 
-1. open somnoire and allow bluetooth access when prompted.
-2. open settings, choose general, and find your nearby power bank.
-3. select your bank and enter its numeric ecoflow account id once. this is your account id, not your email or password.
-4. connect, then open the menu bar dashboard. you can enable launch at login in general settings.
+the [installation guide](docs/installation.md) covers first launch, macOS permissions, updates, and troubleshooting.
 
-after a successful connection, somnoire saves a bank-specific credential in your mac's keychain. remembered access has been tested across quit and relaunch. the account id is cleared after use.
+1. grab the app from [GitHub Releases](https://github.com/Kusanalee/Somnoire/releases), unzip it, and move it to Applications. it isn’t Apple-notarized, so macOS may block the first launch; see the release’s instructions before proceeding.
+2. open Somnoire, allow Bluetooth access when prompted, and keep your supported bank awake and nearby. the development version’s welcome guide walks through setup; v0.11.0 uses settings → general.
+3. choose your bank and the experience you want. close the official EcoFlow app’s Bluetooth connection if it is holding the bank’s connection.
 
-battery percentage monitoring works without an account. live readings and settings currently need that one-time account-id setup. fully account-free pairing is still being researched.
+| experience in the development version | account needed? |
+| :-- | :-- |
+| **battery percentage only** — the default, with nearby battery monitoring and optional alerts | no |
+| **full readings** — wattage, battery information, and device settings | one-time setup with the bank’s authorizing EcoFlow account ID |
 
-keep the bank nearby and awake. if it cannot connect, close the official app's connection and try again. only the selected bank is used; somnoire does not silently switch to another one.
+for full readings, enter **only the numeric account ID**, never your email, password, or login token. an already-linked bank needs its existing authorizing account. after a successful connection, access is remembered in this Mac’s Keychain and the ID is cleared after use.
 
-## everyday use
+[the first-time setup guide](docs/first-time-setup.md) covers official-app setup, regional browser ID retrieval, connection handoff, and checking remembered access. the browser procedure is community-documented and varies by region; an ID is only confirmed when the bank accepts it.
 
-open the dashboard for live power readings. closing the dashboard and settings ends the active connection while enabled background battery monitoring continues.
+use the dashboard’s gear to open settings in the development version. forget bank removes remembered access from this Mac; it does not unbind or reset the bank.
 
-changes in settings stay local until you click apply. “settings applied” appears after the bank reports the new values. revert discards your edits, and done closes settings without applying them.
+## downloads and compatibility
 
-missing or expired readings show dashes. disconnected battery information is marked with its last update. forget bank removes its saved credential from this mac; it does not unbind or reset the bank.
+**[download Somnoire →](https://github.com/Kusanalee/Somnoire/releases)**
 
-## downloads
+- **published release:** [v0.11.0 · prerelease](https://github.com/Kusanalee/Somnoire/releases/tag/v0.11.0), with a universal app ZIP and SHA-256 checksums.
+- **Mac:** macOS 13 or later, on Apple silicon or Intel. not every supported macOS version has been tested on hardware.
+- **verified bank:** EcoFlow RAPID Pro 27,650 mAh, P512. other models and firmware are unverified.
+- **signing:** v0.11.0 is ad-hoc signed, **not Apple-notarized**. the current personal development build uses a reusable local signing certificate; it is also not notarized. neither is a Developer ID release.
 
-**0.11.0 is a prerelease.** download the app from [releases](https://github.com/kusanalee/somnoire/releases). it supports apple silicon and intel macs running macos 13 or later.
+current-source features shown here need a source build until a newer release is published. [building instructions](docs/building.md) explain the local signer and build requirements; Xcode with Swift 6 support is required. the maintainer’s signing key is not included.
 
-the downloadable build is locally signed, not apple-notarized, so macos may block its first launch. you can also build the app yourself by opening the xcode project and running the somnoire scheme on your mac. building requires xcode with swift 6 support.
+## a local little companion
 
-## current limits
+Somnoire’s everyday operation stays on your Mac over Bluetooth. there are no analytics or in-app cloud requests, and the app never asks for your EcoFlow password. help and check-for-updates links open your browser; full setup may require the official app and website outside Somnoire.
 
-- tested with the rapid pro p512; other power banks are not verified
-- custom artwork upload is unavailable; the official app also restricts artwork in bluetooth mode
-- charging and screen controls have been user-tested, but physical charge and discharge cutoffs have not been independently validated
-- input direction, dock readings, and every supported macos version have not all been checked on hardware
+bank access uses a local, non-synchronizing Keychain credential. preferences and bank selection stay on your Mac. copied diagnostics omit account IDs, credentials, device identities, measurement values, and packet contents; reveal the troubleshooting window by clicking the app icon thirteen times in settings → about.
 
-the local artwork preview remains experimental and cannot upload to the bank. this release does not add cloud connectivity or change the bank's existing ecoflow pairing.
+alerts are opt-in and silent. they need Somnoire running, monitoring enabled, and the bank nearby; monitoring pauses while your Mac sleeps. they don’t require an authenticated connection. the default threshold is 20%, with one notification per low-battery event; a fresh reading five points above the threshold rearms it.
 
-## privacy
+## a few things to know
 
-somnoire operates locally over bluetooth. it has no analytics or cloud requests and never asks for your password.
+- percentage monitoring is account-free; account-free **full readings and settings** have not been established for the tested linked bank.
+- Somnoire uses the clock artwork already installed on the bank. time setup, artwork changes, sharing, and firmware updates belong in the [official EcoFlow app](https://www.ecoflow.com/us/app-download). automatic local time sync and custom artwork upload are unavailable.
+- charging and screen controls have been user-tested, but physical charge/discharge cutoffs have not been independently validated. input-direction behavior and dock readings still have hardware-validation gaps.
+- three decimal places is a display preference, not a promise of greater accuracy. advertisements report whole percentages.
+- the personal development build retained Bluetooth permission across relaunches and a changed-build upgrade, and displayed the notification artwork on the test Mac. that isn’t a guarantee for every Mac or signing identity.
 
-only the derived bank credential is stored in keychain. bank selection and preferences stay on your mac. copied diagnostics exclude account ids, credentials, device identities, measurement values, and packet contents. troubleshooting tools are tucked away under advanced settings.
+## under the moonlight, under the hood
 
-## development
+Somnoire uses SwiftUI and CoreBluetooth. if you’re curious about how it works:
 
-the app uses native macos controls. [build instructions](docs/building.md), protocol research, and validation history live in [docs](docs/). private captures, android packages, and build files are excluded from the repository.
+- [installation and updates](docs/installation.md)
+- [build, sign, and test locally](docs/building.md)
+- [first-time account-ID setup](docs/first-time-setup.md)
+- [Bluetooth reverse-engineering research](docs/BLE-Research.md)
+- [P512 protocol implementation and current findings](docs/P512-Protocol.md)
+- [telemetry validation history](docs/Phase2E.md) and [earlier validation records](docs/Validation.md)
+- [test sources](SomnoireTests/) and [historical development notes](docs/)
 
-original code is mit licensed. see the license file and third-party notices in this repository for dependency licenses.
+protocol research distinguishes decoded data from physical hardware checks. private captures, Android packages, credentials, and build artifacts stay out of the repository.
+
+---
+
+named for Somnoire in *Wuthering Waves*. a small personal project, made for a quieter corner of the menu bar.
+
+independent and unaffiliated with EcoFlow or the creators and publisher of *Wuthering Waves*. Phrolova and game imagery belong to their respective rights holders.
+
+original code is [MIT licensed](LICENSE). dependency licenses and credits are in [third-party notices](ThirdPartyNotices.txt); the code license does not grant rights to third-party characters or artwork.

@@ -68,5 +68,12 @@ void sn_probe_test_rng_failure(int fail);
 
 // Local, non-synchronizing Keychain storage of validated bank credentials.
 SNProbeCredential *sn_probe_credential_load(const char *bank);
+SNProbeCredential *sn_probe_credential_load_status(const char *bank, int32_t *status);
 int sn_probe_credential_save(const char *bank, const SNProbeCredential *credential);
 int sn_probe_credential_forget(const char *bank);
+
+int sn_probe_clock_request(SNProbeCrypto *context, uint32_t sequence, uint32_t utc, int32_t offset, const char *zone, uint8_t *output, size_t capacity, size_t *written);
+
+#ifdef DEBUG
+int sn_probe_test_credential_migration(int scenario);
+#endif

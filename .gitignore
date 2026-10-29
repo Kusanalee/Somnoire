@@ -8,3 +8,10 @@ xcuserdata/
 *.cfa
 *.btsnoop
 *.apk
+
+# Local test caches and signing key material.
+__pycache__/
+*.py[cod]
+*.p12
+*.pfx
+*.key

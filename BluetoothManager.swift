@@ -5,6 +5,26 @@ import CoreBluetooth
 /// Ordinary connections inspect GATT only. Explicit probes have a bounded write path.
 @MainActor
 final class BluetoothManager: NSObject, ObservableObject {
+    let alerts: LowBatteryAlerts
+    @Published private(set) var appMode: AppMode = .percentageOnly
+    @Published private(set) var battery = BatteryPresentation()
+    var batteryIsFresh: Bool { battery.fresh(now: now(), available: availability == .ready && !asleep && (monitor.enabled || liveOwner)) }
+    func setAppMode(_ mode: AppMode) {
+        guard appMode != mode else { return }
+        cancelSettingsPane(); clearLiveCredential()
+        appMode = mode; preferences.set(mode.rawValue, forKey: "appMode")
+        automaticAttempted = false
+        if mode == .fullReadings { attemptVisibleConnection() }
+    }
+    // Release gate: no automatic clock writes, observers or saved preference reads.
+    static let automaticClockSyncAvailable = false
+    #if DEBUG
+    func diagnoseClockSync(completion: @escaping (Bool) -> Void) {
+        guard liveOwner, liveStatus == .live, !settingsBusy, let probe,
+              let request = ClockSyncRequest.make(date: Date(), timezone: .current) else { completion(false); return }
+        probe.applyHealthy(HealthyChange(clock: request), completion: completion)
+    }
+    #endif
     @Published private(set) var panePhases: [SettingsPane: PanePhase] = [:]
     private var transactionPane: SettingsPane?
     private var transactionGeneration = 0
@@ -56,7 +76,7 @@ final class BluetoothManager: NSObject, ObservableObject {
         transactionGeneration += 1
         if let pane = transactionPane { panePhases[pane] = transactionConfirmed > 0 ? .partial : .notConfirmed }
         transactionPane = nil
-        probe?.cancelSettings()
+        probe?.cancelPaneSettings()
         if settingsStatus == .applying { settingsStatus = .notConfirmed }
     }
     @Published private(set) var screenSettings: [ScreenField: UInt32] = [:]
@@ -126,7 +146,7 @@ final class BluetoothManager: NSObject, ObservableObject {
         return .establishAccess
     }
     private func attemptVisibleConnection() {
-        guard panelVisible, !automaticAttempted, connection.isIdle,
+        guard appMode == .fullReadings, panelVisible, !automaticAttempted, connection.isIdle,
               let id = selectedTargetID, devices.contains(where: { $0.id == id }) else { return }
         automaticAttempted = true; startLive()
     }
@@ -145,7 +165,7 @@ final class BluetoothManager: NSObject, ObservableObject {
         if liveOwner { disconnect() }
     }
     func startLive(userID: String? = nil) {
-        guard panelVisible, connection.isIdle, let id = selectedTargetID,
+        guard appMode == .fullReadings, panelVisible, connection.isIdle, let id = selectedTargetID,
               let device = devices.first(where: { $0.id == id }), canConnect(device),
               device.advertisement.supportsKeyExchangeProbe else {
             liveStatus = .needsBank; return
@@ -157,7 +177,11 @@ final class BluetoothManager: NSObject, ObservableObject {
             credentialBank = cachedCredential == nil ? nil : id
         }
         if cachedCredential == nil {
-            cachedCredential = credentialStore.load(bank: id)
+            switch credentialStore.loadResult(bank: id) {
+            case .success(let credential): cachedCredential = credential
+            case .failure(.missing): break
+            case .failure: notice = "Saved access could not be opened or migrated. Unlock your Keychain or use one-time account-ID setup. Existing credentials were preserved."
+            }
             credentialBank = cachedCredential == nil ? nil : id
         }
         guard let credential = cachedCredential else { liveStatus = .needsCredential; return }
@@ -231,11 +255,17 @@ final class BluetoothManager: NSObject, ObservableObject {
     private var wakeObserver: AnyCancellable?
 
     init(preferences: UserDefaults = .standard, credentialStore: any BankCredentialStore = KeychainBankCredentialStore(), now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+        alerts = LowBatteryAlerts(preferences: preferences)
         self.credentialStore = credentialStore
         self.preferences = preferences; self.now = now
         monitor = MonitoringState(enabled: preferences.bool(forKey: "monitoringEnabled"),
             targetID: preferences.string(forKey: "selectedPeripheral").flatMap(UUID.init(uuidString:)))
         super.init()
+        if let value = preferences.string(forKey: "appMode"), let mode = AppMode(rawValue: value) { appMode = mode }
+        else {
+            if let bank = monitor.targetID, let saved = credentialStore.load(bank: bank) { appMode = .fullReadings; saved.clear() }
+            preferences.set(appMode.rawValue, forKey: "appMode")
+        }
         // Construction is hardware-free. The system permission request is deferred to Scan.
         sleepObserver = NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.willSleepNotification)
             .receive(on: DispatchQueue.main)
@@ -268,18 +298,23 @@ final class BluetoothManager: NSObject, ObservableObject {
         if monitor.enabled { reconcileScanning() } else { startScan() }
     }
     func selectPowerBank(_ id: UUID) {
-        if id != selectedTargetID { clearLiveCredential() }
+        if id != selectedTargetID { alerts.cancelPendingEvaluation(); clearLiveCredential() }
         guard monitor.select(id, now: now()) else { notice = "Power bank is no longer nearby. Discover devices again."; return }
+        if battery.bank != id { battery = BatteryPresentation() }
+        if appMode == .percentageOnly { preferences.set(true, forKey: "onboardingComplete") }
         preferences.set(id.uuidString, forKey: "selectedPeripheral")
         startMonitoring()
         diagnostics.record(.targetSelected); publishMonitoring(); armMaintenance()
     }
     func forgetPowerBank() {
+        if let bank = selectedTargetID { alerts.forget(bank: bank) }
         if let bank = selectedTargetID, !credentialStore.forget(bank: bank) {
             notice = "Could not remove the saved credential. Try Forget again."; return
         }
         preferences.set(false, forKey: "onboardingComplete")
+        preferences.set(OnboardingStep.welcome.rawValue, forKey: "onboardingStep")
         clearLiveCredential()
+        battery = BatteryPresentation()
         monitor.forget(); preferences.removeObject(forKey: "selectedPeripheral")
         batteryOutcomes.clear(); publishMonitoring(); reconcileScanning()
     }
@@ -301,6 +336,11 @@ final class BluetoothManager: NSObject, ObservableObject {
         publicationTask?.cancel(); publicationTask = nil
         monitoring = monitor.presentation(now: now(), availability: availability, asleep: asleep,
             diagnosticBusy: scanRequested || !connection.isIdle)
+        if let id = selectedTargetID, let reading = monitoring.lastReading, reading.observedAt != battery.observedAt,
+           battery.observedAt.map({ reading.observedAt > $0 }) ?? true {
+            battery.receive(bank: id, value: Double(reading.percentage), date: reading.observedAt, now: monitor.lastBatteryAt ?? (now() - 30), source: "advertisement")
+        }
+        if let bank = battery.bank, let percentage = battery.alertPercentage { alerts.evaluate(bank: bank, percentage: percentage, fresh: batteryIsFresh && monitor.enabled) }
         if scanMode == .monitoring { devices = monitoring.candidates }
         attemptVisibleConnection()
         publicationGate.published(now: now())
@@ -330,6 +370,7 @@ final class BluetoothManager: NSObject, ObservableObject {
             self.monitor.settle(now: self.now())
             if let id = self.monitor.targetID, id != previous {
                 self.preferences.set(id.uuidString, forKey: "selectedPeripheral")
+                if self.appMode == .percentageOnly { self.preferences.set(true, forKey: "onboardingComplete") }
                 self.diagnostics.record(.targetSelected)
             }
             self.publishMonitoring(); self.armMaintenance()
@@ -564,6 +605,7 @@ final class BluetoothManager: NSObject, ObservableObject {
     }
 
     private func resetConnection() {
+
         pendingCredential?.clear(); pendingCredential = nil
         connectionTimer?.cancel()
         connectionTimer = nil
@@ -604,8 +646,13 @@ final class BluetoothManager: NSObject, ObservableObject {
     private func startProbe() {
         let session = KeyExchangeProbe(kind: requestedProbeKind, live: liveOwner, credential: pendingCredential)
         pendingCredential = nil
+        session.onClockSync = { [weak self] outcome in self?.diagnostics.record(.clockSync, fields: [.clockSync(outcome)]) }
         session.onTelemetry = { [weak self] delta in
             guard let self, self.liveOwner, self.panelVisible else { return }
+            if let value = delta.batteryPercentage, let bank = self.selectedTargetID {
+                self.battery.receive(bank: bank, value: Double(value), date: Date(), now: self.now(), source: "telemetry")
+                self.alerts.evaluate(bank: bank, percentage: Int(value.rounded()), fresh: self.batteryIsFresh && self.monitor.enabled)
+            }
             self.screenSettings.merge(delta.screen) { _, new in new }
             self.healthySettings.receive(P512TelemetryDelta(healthyMode: delta.healthyMode, chargeCeiling: delta.chargeCeiling, dischargeFloor: delta.dischargeFloor))
             self.batteryInformation.receive(delta, at: Date())

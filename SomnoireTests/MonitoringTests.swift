@@ -1,10 +1,59 @@
 import XCTest
 import SwiftUI
 import AppKit
-import ImageIO
 @testable import Somnoire
 
 final class MonitoringTests: XCTestCase {
+    @MainActor
+    func testAlertPreferenceAndLatchPersistenceWithoutPermissionRequests() {
+        let suite = "SomnoireTests.Alerts", prefs = UserDefaults(suiteName: "SomnoireTests.Alerts")!
+        prefs.removePersistentDomain(forName: suite); defer { prefs.removePersistentDomain(forName: suite) }
+        let alerts = LowBatteryAlerts(preferences: prefs), bank = UUID()
+        XCTAssertFalse(alerts.enabled); XCTAssertEqual(alerts.threshold, 20)
+        alerts.threshold = 15
+        XCTAssertEqual(LowBatteryAlerts(preferences: prefs).threshold, 15)
+        alerts.evaluate(bank: bank, percentage: 0, fresh: false)
+        XCTAssertFalse(prefs.bool(forKey: "lowBatteryLatch.\(bank.uuidString).15"))
+        prefs.set(true, forKey: "lowBatteryLatch.\(bank.uuidString).15")
+        alerts.forget(bank: bank)
+        XCTAssertFalse(prefs.bool(forKey: "lowBatteryLatch.\(bank.uuidString).15"))
+    }
+    func testLowBatteryHysteresisAndThresholds() {
+        var latched = false, count = 0
+        for percentage in [20,20,19,21,24,25,20] {
+            let result = LowBatteryPolicy.next(percentage: percentage, threshold: 20, latched: latched)
+            latched = result.latched; if result.alert { count += 1 }
+        }
+        XCTAssertEqual(count, 2)
+        XCTAssertFalse(LowBatteryPolicy.next(percentage: -1, threshold: 20, latched: false).alert)
+        XCTAssertTrue(LowBatteryPolicy.next(percentage: 0, threshold: 10, latched: false).alert)
+    }
+    func testSharedBatteryRetainsStaleAndRejectsInvalidUpdates() {
+        var battery = BatteryPresentation(); let bank = UUID(), date = Date()
+        XCTAssertEqual(battery.text, "—")
+        battery.receive(bank: bank, value: 42, date: date, now: 0, source: "advertisement")
+        XCTAssertTrue(battery.fresh(now: 29, available: true))
+        XCTAssertFalse(battery.fresh(now: 30, available: true)); XCTAssertEqual(battery.text, "42%")
+        battery.receive(bank: bank, value: .nan, date: date, now: 31, source: "telemetry")
+        XCTAssertEqual(battery.sampledAt, 0)
+        battery.receive(bank: bank, value: 0, date: date, now: 32, source: "telemetry")
+        XCTAssertEqual(battery.text, "0%")
+        XCTAssertFalse(battery.fresh(now: 32, available: false))
+    }
+    @MainActor
+    func testBasicModeNeverStartsLiveConnectionAndPersistsChoice() {
+        let suite = "SomnoireTests.BasicMode", prefs = UserDefaults(suiteName: "SomnoireTests.BasicMode")!
+        prefs.removePersistentDomain(forName: suite)
+        defer { prefs.removePersistentDomain(forName: suite) }
+        let manager = BluetoothManager(preferences: prefs)
+        defer { manager.shutdown() }
+        XCTAssertEqual(manager.appMode, .percentageOnly)
+        manager.panelVisibility(true); manager.settingsVisibility(true); manager.startLive(userID: "123")
+        XCTAssertFalse(manager.isProbing)
+        manager.setAppMode(.fullReadings); XCTAssertEqual(prefs.string(forKey: "appMode"), "fullReadings")
+        manager.setAppMode(.percentageOnly); XCTAssertFalse(manager.isProbing)
+    }
+
     private func profile(_ percent: UInt8 = 96) -> AdvertisementSnapshot {
         var bytes = Data([0xB5, 0xB5, 0x13]) + Data("P512000000000000".utf8) + Data(repeating: 0, count: 6)
         bytes[19] = percent; bytes[24] = 0xBE
@@ -114,36 +163,20 @@ final class MonitoringTests: XCTestCase {
         XCTAssertNil(zero.fresh(at: start.addingTimeInterval(5)))
         XCTAssertEqual(voltage.fresh(at: start.addingTimeInterval(5)), 9.2)
     }
-    func testArtworkOrientationAndBlackComposite() throws {
-        let context = try XCTUnwrap(CGContext(data: nil, width: 2, height: 1, bitsPerComponent: 8, bytesPerRow: 8,
-            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-        let transparent = try XCTUnwrap(context.makeImage())
-        let cropped = try XCTUnwrap(ArtworkCodec.crop(transparent, zoom: 1, x: 0, y: 0))
-        XCTAssertEqual(cropped.width, 240); XCTAssertEqual(cropped.height, 240)
-        let bytes = try XCTUnwrap(cropped.dataProvider?.data) as Data
-        XCTAssertEqual(Array(bytes.prefix(4)), [0,0,0,255])
-        let data = NSMutableData()
-        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, "public.jpeg" as CFString, 1, nil))
-        CGImageDestinationAddImage(destination, transparent, [kCGImagePropertyOrientation: 6] as CFDictionary)
-        XCTAssertTrue(CGImageDestinationFinalize(destination))
-        let source = try XCTUnwrap(CGImageSourceCreateWithData(data, nil))
-        let normalized = try XCTUnwrap(ArtworkCodec.normalized(source))
-        XCTAssertEqual(normalized.width, 1); XCTAssertEqual(normalized.height, 2)
-    }
-
     @MainActor
-    func testSettingsRenderingAndArtworkPackage() throws {
+    func testLocalSettingsRendering() throws {
         let manager = BluetoothManager(preferences: UserDefaults(suiteName: "SomnoireTests.SettingsRender")!)
         defer { manager.shutdown() }
         manager.panelVisibility(true); manager.settingsVisibility(true); manager.panelVisibility(false)
         XCTAssertFalse(manager.isProbing); manager.settingsVisibility(false)
-        for pane in [0,1,2] {
+        for pane in [0,1,2,3,4] {
         for dark in [false, true] {
-            let height: CGFloat = pane == 1 ? 570 : 430
-            let view = NSHostingView(rootView: SomnoireSettingsView(bluetooth: manager, pane: pane).frame(width: 560, height: height).background(dark ? Color(white: 0.12) : Color(white: 0.95))
+            let height: CGFloat = 600
+            manager.setAppMode(.fullReadings)
+            let view = NSHostingView(rootView: SomnoireSettingsView(bluetooth: manager, pane: pane).frame(width: 760, height: height).background(dark ? Color(white: 0.12) : Color(white: 0.95))
                 .environment(\.colorScheme, dark ? .dark : .light))
             view.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: height), styleMask: [.titled], backing: .buffered, defer: false)
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: height), styleMask: [.titled], backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false; window.contentView = view; window.appearance = view.appearance
             window.orderFront(nil)
             RunLoop.current.run(until: Date().addingTimeInterval(0.15))
@@ -154,14 +187,15 @@ final class MonitoringTests: XCTestCase {
             window.close()
         }
         }
-        let pixel: [UInt8] = [255,0,0,255]
-        let rgba = Array(repeating: pixel, count: 240*240).flatMap { $0 }
-        let package = try XCTUnwrap(ArtworkCodec.package(rgba: rgba, id: "test"))
-        XCTAssertEqual(package.count, 115276)
-        XCTAssertEqual(Array(package.prefix(12)), [0,0,0,2,0,0,0,4,0,0,0,4])
-        XCTAssertEqual(Array(package[60..<64]), [0,0,0,72])
-        XCTAssertEqual(Array(package[76..<80]), [0,248,0,248])
-        XCTAssertNil(ArtworkCodec.package(rgba: [], id: "test"))
+        for dark in [false, true] {
+            let view = NSHostingView(rootView: FirstTimeSetupSheet().background(dark ? Color(white: 0.12) : Color(white: 0.95)).environment(\.colorScheme, dark ? .dark : .light))
+            view.frame = NSRect(x: 0, y: 0, width: 560, height: 530)
+            view.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+            view.layoutSubtreeIfNeeded()
+            let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try bitmap.representation(using: .png, properties: [:])?.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("setup-\(dark).png"))
+        }
         XCTAssertTrue(ScreenField.chargingClockDuration.accepts(UInt32.max))
         XCTAssertFalse(ScreenField.clockDuration.accepts(UInt32.max))
         XCTAssertFalse(ScreenField.duration.accepts(81))
@@ -251,8 +285,14 @@ final class MonitoringTests: XCTestCase {
             if manager.monitoring.percentage != nil && manager.monitoring.receipts >= 10 { break }
             try await Task.sleep(for: .milliseconds(100))
         }
+        guard manager.availability == .ready else { throw XCTSkip("Bluetooth did not become ready for live acceptance") }
         XCTAssertNotNil(manager.monitoring.percentage, manager.monitoring.status)
         XCTAssertGreaterThanOrEqual(manager.monitoring.receipts, 10)
+        XCTAssertEqual(manager.appMode, .percentageOnly)
+        manager.panelVisibility(true); manager.settingsVisibility(true)
+        XCTAssertEqual(manager.battery.text, manager.monitoring.menuBarText)
+        XCTAssertTrue(manager.batteryIsFresh)
+        XCTAssertFalse(manager.isProbing)
         let firstCount = manager.monitoring.receipts
         let firstTime = manager.monitoring.lastReading?.observedAt
         // Deliberately exceed the old 30-second scan deadline with no menu open.
@@ -305,5 +345,123 @@ final class MonitoringTests: XCTestCase {
         XCTAssertTrue(manager.gattIsStale); XCTAssertEqual(manager.services.count, count)
         XCTAssertFalse(manager.diagnostics.events.contains { $0.kind == .probeStarted || $0.kind == .subscription })
         print("Explicit GATT inspection completed; close resumed passive monitoring and retained stale services; no probe or subscriptions.")
+    }
+}
+
+final class PolishTests: XCTestCase {
+    func testOnboardingRoutesAndResume() {
+        XCTAssertEqual(OnboardingStep.bank.next(mode: .percentageOnly), .ready)
+        XCTAssertEqual(OnboardingStep.ready.previous(mode: .percentageOnly), .bank)
+        XCTAssertEqual(OnboardingStep.bank.next(mode: .fullReadings), .access)
+        XCTAssertEqual(OnboardingStep.ready.previous(mode: .fullReadings), .access)
+        XCTAssertFalse(OnboardingStep.bank.canAdvance(hasBank: false, live: false))
+        XCTAssertTrue(OnboardingStep.bank.canAdvance(hasBank: true, live: false))
+        XCTAssertFalse(OnboardingStep.access.canAdvance(hasBank: true, live: false))
+        XCTAssertTrue(OnboardingStep.access.canAdvance(hasBank: true, live: true))
+        let prefs = UserDefaults(suiteName: "SomnoireTests.SetupResume")!
+        defer { prefs.removePersistentDomain(forName: "SomnoireTests.SetupResume") }
+        prefs.set(OnboardingStep.access.rawValue, forKey: "onboardingStep")
+        XCTAssertEqual(OnboardingStep(rawValue: prefs.integer(forKey: "onboardingStep")), .access)
+    }
+
+    func testRelativeAgeBoundaries() {
+        let now = Date(timeIntervalSince1970: 10000)
+        for (seconds, expected) in [(0,"recently"),(599,"recently"),(600,"10 minutes ago"),(899,"10 minutes ago"),(900,"15 minutes ago"),(3599,"55 minutes ago"),(3600,"a long time ago"),(-1,"recently")] {
+            XCTAssertEqual(RelativeAge.text(since: now.addingTimeInterval(-Double(seconds)), at: now), expected)
+        }
+    }
+    func testDiagnosticsUnlockOnlyAtThirteen() {
+        var unlock = DiagnosticsUnlock()
+        for _ in 0..<12 { XCTAssertFalse(unlock.activate()); XCTAssertFalse(unlock.unlocked) }
+        XCTAssertTrue(unlock.activate()); XCTAssertTrue(unlock.unlocked)
+        XCTAssertFalse(unlock.activate()); XCTAssertEqual(unlock.count, 13)
+        XCTAssertFalse(DiagnosticsUnlock().unlocked)
+    }
+    @MainActor func testIdentityAndColorAssets() throws {
+        XCTAssertNotNil(NSImage(named: "AppIcon"))
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleIconName") as? String, "AppIcon")
+        XCTAssertNotNil(Bundle.main.url(forResource: "Assets", withExtension: "car"))
+        let iconFile = Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") as? String
+        XCTAssertEqual(iconFile, "AppIcon")
+        XCTAssertNotNil(Bundle.main.url(forResource: iconFile, withExtension: "icns"))
+        for awake in [false, true] {
+            let icon = MenuBarArtwork.nouNou(awake: awake)
+            XCTAssertFalse(icon.isTemplate); XCTAssertEqual(icon.size.height, 20)
+            XCTAssertEqual(Set(icon.representations.map { $0.pixelsWide }), Set([20,40]))
+            XCTAssertNotNil(icon.tiffRepresentation)
+            let preview = NSImage(size: NSSize(width: 80, height: 40), flipped: false) { rect in
+                NSColor.white.setFill(); rect.fill()
+                icon.draw(in: NSRect(x: 5,y: 10,width: 20,height: 20))
+                icon.draw(in: NSRect(x: 35,y: 2,width: 40,height: 40))
+                return true
+            }
+            let bitmap = NSBitmapImageRep(data: try XCTUnwrap(preview.tiffRepresentation))!
+            try bitmap.representation(using: .png, properties: [:])?.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("nounou-\(awake).png"))
+        }
+    }
+    @MainActor func testRenderOnboardingAndAbout() throws {
+        let prefs = UserDefaults(suiteName: "SomnoireTests.PolishRender")!
+        prefs.removePersistentDomain(forName: "SomnoireTests.PolishRender")
+        let manager = BluetoothManager(preferences: prefs)
+        defer { manager.shutdown() }
+        for dark in [false,true] {
+            let views: [(String, AnyView)] = OnboardingStep.allCases.map { ("setup-\($0.rawValue)", AnyView(OnboardingView(bluetooth: manager).defaultAppStorage(prefs))) } + [("about",AnyView(AboutPane()))]
+            for (name, root) in views {
+                prefs.set(Int(name.split(separator: "-").last ?? "0") ?? 0, forKey: "onboardingStep")
+                let view = NSHostingView(rootView: root.background(Color(nsColor: .windowBackgroundColor)).environment(\.colorScheme, dark ? .dark : .light))
+                let window = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 580,height: 610), styleMask: [.titled], backing: .buffered, defer: false)
+                window.isReleasedWhenClosed = false; window.contentView = view
+                view.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+                view.layoutSubtreeIfNeeded()
+                let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+                try bitmap.representation(using: .png, properties: [:])?.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("polish-\(name)-\(dark).png"))
+                window.close()
+            }
+        }
+    }
+}
+
+final class PercentagePrecisionTests: XCTestCase {
+    let locale = Locale(identifier: "en_US")
+    func testReportedFractionsAndWholeAdvertisements() {
+        var battery = BatteryPresentation()
+        let bank = UUID(), date = Date()
+        battery.receive(bank: bank, value: 80.125, date: date, now: 0, source: "telemetry")
+        XCTAssertEqual(battery.percentage, 80.125)
+        for (precision, expected) in zip(PercentagePrecision.allCases, ["80%","80.1%","80.13%","80.125%"]) {
+            XCTAssertEqual(battery.formatted(precision: precision, locale: locale), expected)
+            XCTAssertEqual(battery.alertPercentage, 80)
+            XCTAssertEqual(battery.sampledAt, 0)
+        }
+        battery.receive(bank: bank, value: 80, date: date.addingTimeInterval(1), now: 1, source: "advertisement")
+        for precision in PercentagePrecision.allCases { XCTAssertEqual(battery.formatted(precision: precision, locale: locale), "80%") }
+        XCTAssertEqual(battery.observedAt, date.addingTimeInterval(1))
+        XCTAssertFalse(battery.fresh(now: 31, available: true))
+    }
+    func testRoundingValidationAndAlertIndependence() {
+        var battery = BatteryPresentation(); let bank = UUID(), date = Date()
+        XCTAssertEqual(PercentagePrecision.saved(4), .whole)
+        XCTAssertEqual(PercentagePrecision.saved(-1), .whole)
+        for value in [0.0, 20.499, 20.5, 99.9999, 100] {
+            battery.receive(bank: bank, value: value, date: date, now: 1, source: "telemetry")
+            for precision in PercentagePrecision.allCases {
+                _ = battery.formatted(precision: precision, locale: locale)
+                XCTAssertEqual(battery.alertPercentage, Int(value.rounded()))
+            }
+        }
+        battery.receive(bank: bank, value: 99.9999, date: date, now: 2, source: "telemetry")
+        XCTAssertEqual(battery.formatted(precision: .three, locale: locale), "100%")
+        for invalid in [Double.nan, .infinity, -0.01, 100.01] {
+            battery.receive(bank: bank, value: invalid, date: date, now: 3, source: "telemetry")
+            XCTAssertEqual(battery.percentage, 99.9999); XCTAssertEqual(battery.sampledAt, 2)
+        }
+        XCTAssertEqual(battery.formatted(precision: .three, locale: Locale(identifier: "de_DE")), "100%")
+    }
+}
+
+final class CredentialMigrationTests: XCTestCase {
+    @MainActor func testNativeMigrationAndFailurePreservation() {
+        for scenario in 0...7 { XCTAssertEqual(sn_probe_test_credential_migration(Int32(scenario)), 1, "Migration scenario \(scenario)") }
     }
 }

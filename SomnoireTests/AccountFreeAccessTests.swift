@@ -77,6 +77,90 @@ private final class AccessHarness {
 
 final class AuthenticatedAccessTests: XCTestCase {
     @MainActor
+    func testHardwareClockDiagnostic() async throws {
+        guard ProcessInfo.processInfo.environment["SOMNOIRE_CLOCK_DIAGNOSTIC"] == "1" else { throw XCTSkip("Explicit clock diagnostic only") }
+        let prefs = UserDefaults(suiteName: "SomnoireTests.BoundedClock")!
+        prefs.removePersistentDomain(forName: "SomnoireTests.BoundedClock")
+        prefs.set(UserDefaults.standard.string(forKey: "selectedPeripheral"), forKey: "selectedPeripheral")
+        prefs.set(AppMode.fullReadings.rawValue, forKey: "appMode")
+        let manager = BluetoothManager(preferences: prefs)
+        defer { manager.shutdown() }
+        manager.startMonitoring(); manager.panelVisibility(true)
+        for _ in 0..<150 {
+            if manager.liveStatus == .live { break }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        guard manager.liveStatus == .live else { throw XCTSkip("No live session (\(manager.availability.rawValue)); no clock write performed") }
+        var finished = false, confirmed = false
+        manager.diagnoseClockSync { confirmed = $0; finished = true }
+        for _ in 0..<60 {
+            if finished { break }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        XCTAssertTrue(finished)
+        print("Clock diagnostic readback confirmed: \(confirmed)")
+        print(manager.diagnosticReport().split(separator: "\n").filter { $0.contains("Clock") }.joined(separator: "\n"))
+    }
+    @MainActor
+    func testDisabledClockMigrationAndNumericSetupValidation() {
+        let prefs = UserDefaults(suiteName: "SomnoireTests.ClockGate")!
+        prefs.set(true, forKey: "clockSyncEnabled")
+        let manager = BluetoothManager(preferences: prefs)
+        defer { manager.shutdown(); prefs.removePersistentDomain(forName: "SomnoireTests.ClockGate") }
+        XCTAssertFalse(BluetoothManager.automaticClockSyncAvailable)
+        XCTAssertFalse(manager.isProbing)
+        for value in ["", " 12", "1e3", "１２", String(repeating: "1", count: 33)] { XCTAssertFalse(validEcoFlowID(value)) }
+        XCTAssertTrue(validEcoFlowID("123456789"))
+    }
+    @MainActor
+    func testClockCancellationAndMissingReadbackAreDistinct() {
+        let h = AccessHarness(kind: .authenticatedAccess, live: true); h.status()
+        h.probe.writeCompleted(h.writes[3].0, success: true); h.credentialReply(true)
+        h.probe.writeCompleted(h.writes[4].0, success: true)
+        var outcomes: [ClockSyncOutcome] = []
+        h.probe.onClockSync = { outcomes.append($0) }
+        h.probe.applyHealthy(HealthyChange(clock: ClockSyncRequest(utc: 100, offset: 800, zone: "Asia/Manila"))) { _ in }
+        h.probe.cancelPaneSettings(); XCTAssertTrue(outcomes.isEmpty)
+        h.probe.writeCompleted(h.writes.last!.0, success: true)
+        XCTAssertEqual(outcomes, [.sent])
+        h.probe.writeCompleted(h.writes.last!.0, success: true)
+        h.clock.time = 6; h.probe.expire()
+        XCTAssertEqual(outcomes.last, .readback(present: 0, matches: 0))
+        h.probe.applyHealthy(HealthyChange(clock: ClockSyncRequest(utc: 100, offset: 800, zone: "Asia/Manila"))) { _ in }
+        h.probe.cancelSettings(); XCTAssertEqual(outcomes.last, .cancelled)
+    }
+
+    @MainActor
+    func testClockSyncRequiresFreshTimezoneReadbackAndSerializesSettings() throws {
+        let h = AccessHarness(kind: .authenticatedAccess, live: true); h.status()
+        h.probe.writeCompleted(h.writes[3].0, success: true); h.credentialReply(true)
+        h.probe.writeCompleted(h.writes[4].0, success: true)
+        let request = ClockSyncRequest(utc: 100, offset: 800, zone: "Asia/Manila")
+        var result: Bool?, concurrent: Bool?
+        h.probe.applyHealthy(HealthyChange(clock: request)) { result = $0 }
+        h.probe.applyHealthy(HealthyChange(screen: [.brightness: 50])) { concurrent = $0 }
+        XCTAssertEqual(concurrent, false)
+        // 133=offset, 134=timezone ID, 135=automatic. Pre-ack data cannot confirm.
+        let payload = Data([0xa8,0x08,0xa0,0x06,0xb2,0x08,11] + Array("Asia/Manila".utf8) + [0xb8,0x08,1])
+        h.telemetry(payload); XCTAssertNil(result)
+        h.probe.writeCompleted(h.writes.last!.0, success: true)
+        h.probe.writeCompleted(h.writes.last!.0, success: true)
+        h.telemetry(Data([0xa8,0x08,0xa0,0x06])); XCTAssertNil(result)
+        h.telemetry(payload); XCTAssertEqual(result, true)
+    }
+    func testClockOffsetsAndResourceValidation() throws {
+        let date = Date(timeIntervalSince1970: 1800000000)
+        XCTAssertEqual(ClockSyncRequest.make(date: date, timezone: TimeZone(secondsFromGMT: 28800)!)?.offset, 800)
+        XCTAssertEqual(ClockSyncRequest.make(date: date, timezone: TimeZone(secondsFromGMT: -18000)!)?.offset, -500)
+        XCTAssertNil(ClockSyncRequest.make(date: date, timezone: TimeZone(secondsFromGMT: 19800)!))
+        XCTAssertNil(ClockSyncRequest.make(date: date, timezone: TimeZone(secondsFromGMT: 20700)!))
+        XCTAssertFalse(ClockSyncRequest(utc: 1, offset: 800, zone: "bad\nzone").valid)
+        let absent = try P512TelemetryDecoder.decodePayload(Data())
+        XCTAssertNil(absent.timezoneOffset); XCTAssertNil(absent.timezoneID)
+        XCTAssertThrowsError(try P512TelemetryDecoder.decodePayload(Data([0xb2,0x08,1,0xff])))
+    }
+
+    @MainActor
     func testCancelSettingsKeepsDashboardSessionAndRejectsLateAcknowledgement() {
         let h = AccessHarness(kind: .authenticatedAccess, live: true); h.status()
         h.probe.writeCompleted(h.writes[3].0, success: true); h.credentialReply(true)
@@ -429,6 +513,8 @@ final class AuthenticatedAccessTests: XCTestCase {
             let local_private: String, peer_public: String, valid_info: String
             struct HealthyCase: Decodable { let mode: Int32, ceiling: Int32, floor: Int32; let ciphertext: String }
             struct ScreenCase: Decodable { let field: UInt32, value: UInt32; let ciphertext: String }
+            struct ClockCase: Decodable { let offset: Int32; let zone: String; let ciphertext: String }
+            let clock_cases: [ClockCase]
             let screen_cases: [ScreenCase]
             let healthy_cases: [HealthyCase]
             let credential_cases: [CredentialCase], v19_cases: [Case]
@@ -472,6 +558,23 @@ final class AuthenticatedAccessTests: XCTestCase {
             let acceptance = bytes(try XCTUnwrap(vector.credential_cases.first { $0.name == "accepted" }).ciphertext)
             XCTAssertEqual(sn_probe_access_reply(context, acceptance, acceptance.count, &reply, &body, body.count, &length), 4)
             XCTAssertEqual(reply.credential_accepted, 1)
+            for item in vector.clock_cases {
+                var output = [UInt8](repeating: 0, count: 256), length = 0
+                XCTAssertEqual(sn_probe_clock_request(context, 3, 1800000000, item.offset, item.zone, &output, 256, &length), 1)
+                XCTAssertEqual(Data(output.prefix(length)), Data(bytes(item.ciphertext)))
+            }
+            for field: UInt32 in [301,302,303,190] {
+                var output = [UInt8](repeating: 0xcc, count: 32)
+                XCTAssertEqual(sn_probe_screen_request(context, 3, field, 1, &output), 0)
+                XCTAssertTrue(output.allSatisfy { $0 == 0 })
+            }
+            var clockOutput = [UInt8](repeating: 0, count: 256), clockLength = 0
+            XCTAssertEqual(sn_probe_clock_request(context, 3, 1800000000, -500, "America/New_York", &clockOutput, 256, &clockLength), 1)
+            XCTAssertGreaterThan(clockLength, 32)
+            XCTAssertEqual(clockLength % 16, 0)
+            XCTAssertEqual(sn_probe_clock_request(context, 2, 1800000000, 800, "Asia/Manila", &clockOutput, 256, &clockLength), 0)
+            XCTAssertEqual(clockLength, 0); XCTAssertTrue(clockOutput.allSatisfy { $0 == 0 })
+            XCTAssertEqual(sn_probe_clock_request(context, 3, 1800000000, 550, "Asia/Kolkata", &clockOutput, 256, &clockLength), 0)
             for item in vector.screen_cases {
                 var output = [UInt8](repeating: 0, count: 32)
                 XCTAssertEqual(sn_probe_screen_request(context, 3, item.field, item.value, &output), 1)

@@ -1,25 +1,28 @@
 import AppKit
-import ImageIO
-import UniformTypeIdentifiers
 import SwiftUI
 import ServiceManagement
 
 struct SomnoireStatusLabel: View {
     @ObservedObject var bluetooth: BluetoothManager
+    @AppStorage("percentagePrecision") private var decimalPlaces = 0
+    @AppStorage("menuBarStyle") private var iconStyle = MenuBarStyle.default.rawValue
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: "moon.stars")
-            Text(bluetooth.monitoring.menuBarText).monospacedDigit()
+            Group {
+                if iconStyle == MenuBarStyle.nouNou.rawValue { Image(nsImage: MenuBarArtwork.nouNou(awake: bluetooth.batteryIsFresh)).renderingMode(.original).resizable().frame(width: 20, height: 20) }
+                else { Image(systemName: bluetooth.batteryIsFresh ? "moon.stars.fill" : "moon.stars") }
+            }
+            Text(bluetooth.battery.formatted(precision: .saved(decimalPlaces))).monospacedDigit().opacity(bluetooth.batteryIsFresh ? 1 : 0.5)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(bluetooth.monitoring.accessibilityLabel)
+        .accessibilityLabel("Somnoire, \(bluetooth.battery.formatted(precision: .saved(decimalPlaces)))" + (bluetooth.batteryIsFresh ? "" : ", stale, last seen " + (bluetooth.battery.observedAt.map { RelativeAge.text(since: $0, at: Date()) } ?? "unavailable")))
     }
 }
 
 struct SomnoireMenuView: View {
     @ObservedObject var bluetooth: BluetoothManager
-    var openDiagnostics: () -> Void = {}
     var openSettings: () -> Void = {}
+    @AppStorage("percentagePrecision") private var decimalPlaces = 0
     @State private var accountID = ""
     private let ports: [(String, P512ProtocolPort)] = [("C1", .usbC1), ("C2", .usbC2), ("C3", .usbC3), ("C4", .usbC4)]
     var body: some View {
@@ -28,14 +31,15 @@ struct SomnoireMenuView: View {
                 card("BATTERY", icon: "battery.100") {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(bluetooth.monitoring.lastReading.map { "\($0.percentage)%" } ?? "—")
+                            Text(bluetooth.battery.formatted(precision: .saved(decimalPlaces))).opacity(bluetooth.batteryIsFresh ? 1 : 0.5)
                                 .font(.system(size: 36, weight: .bold, design: .rounded))
-                            if bluetooth.monitoring.percentage == nil, let reading = bluetooth.monitoring.lastReading {
-                                Text("Last updated \(Int(max(0, context.date.timeIntervalSince(reading.observedAt))))s ago").font(.caption).foregroundStyle(.secondary)
+                            if !bluetooth.batteryIsFresh, let observedAt = bluetooth.battery.observedAt {
+                                Text("Last seen \(RelativeAge.text(since: observedAt, at: context.date))").font(.caption).foregroundStyle(.secondary)
                             }
 
                         }
                         Spacer(minLength: 8)
+                        if bluetooth.appMode == .fullReadings && bluetooth.hasLiveCredential {
                         VStack(alignment: .trailing, spacing: 10) {
                             ForEach([BatteryInformation.Metric.input, .output], id: \.self) { metric in
                                 VStack(alignment: .trailing, spacing: 2) {
@@ -45,8 +49,10 @@ struct SomnoireMenuView: View {
                                 }
                             }
                         }
+                        }
                     }
                 }
+                if bluetooth.appMode == .fullReadings && bluetooth.hasLiveCredential {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                     ForEach(ports, id: \.0) { name, port in
                         let watts = fresh(port, "W", at: context.date)
@@ -61,27 +67,16 @@ struct SomnoireMenuView: View {
                     }
                 }
                 BatteryInformationSection(information: bluetooth.batteryInformation, date: context.date, active: bluetooth.liveStatus == .live)
-                Button("Settings…", action: openSettings)
-                Text(bluetooth.liveStatus.label).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                if !bluetooth.hasLiveCredential {
-                    Button("Set Up Power Bank…", action: openSettings)
-                } else if bluetooth.liveStatus != .live && !bluetooth.isProbing {
-                    Button("Retry") { bluetooth.startLive() }
+                }
+                if bluetooth.appMode == .fullReadings && !bluetooth.hasLiveCredential {
+                    Text("Set up full readings in Settings.").font(.caption).foregroundStyle(.secondary)
                 }
                 Divider()
                 HStack {
                     Button("Quit") { bluetooth.shutdown(); NSApplication.shared.terminate(nil) }
                     Spacer()
-                    Menu {
-                        Button("Settings…", action: openSettings)
-                        Toggle("Monitor Battery", isOn: Binding(get: { bluetooth.monitoringEnabled }, set: {
-                            if $0 { bluetooth.startMonitoring() } else { bluetooth.pauseMonitoring() }
-                        }))
-                        Button("Choose Power Bank…") { bluetooth.panelVisibility(false); bluetooth.choosePowerBank(); openSettings() }
-                        Button("Forget Power Bank") { bluetooth.forgetPowerBank() }
-                        Button("Diagnostics…") { bluetooth.panelVisibility(false); openDiagnostics() }
-                    } label: { Image(systemName: "gearshape") }.menuStyle(.borderlessButton).frame(width: 28)
-                        .accessibilityLabel("Settings")
+                    Button(action: openSettings) { Image(systemName: "gearshape") }
+                        .buttonStyle(.borderless).frame(width: 28).accessibilityLabel("Settings")
                 }
             }
             .padding(12).frame(width: 328).background(.ultraThinMaterial)
@@ -116,32 +111,23 @@ struct BatteryInformationSection: View {
         DisclosureGroup("Battery Information", isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: 8) {
                 if !active, let latest = information.samples.values.map(\.reportedAt).max() {
-                    Text("Last updated \(Int(max(0, date.timeIntervalSince(latest))))s ago").font(.caption2).foregroundStyle(.secondary)
+                    Text("Previously reported · \(RelativeAge.text(since: latest, at: date))").font(.caption2).foregroundStyle(.secondary)
                 }
                 ForEach([BatteryInformation.Metric.health, .cycles, .temperature, .energyIn, .energyOut], id: \.self) { metric in
+                    if metric == .energyIn { Divider().padding(.vertical, 3) }
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
-                            Text(metric.label)
+                            Text(metric.label).foregroundStyle(.secondary)
                             Spacer()
                             Text(formatted(metric)).monospacedDigit()
-                        }.font(.caption)
-
+                        }.font(.callout)
+                        if !active, let sample = information.samples[metric] {
+                            Text(RelativeAge.text(since: sample.reportedAt, at: date)).font(.caption2).foregroundStyle(.secondary)
+                        }
                     }
                 }
-                Menu {
-                    ForEach(["Auto", "Wh", "kWh"], id: \.self) { unit in
-                        Button(unit) { energyUnit = unit }
-                    }
-                } label: { Text("Energy: \(energyUnit)") }
-                    .menuStyle(.borderlessButton).fixedSize()
-                Menu {
-                    ForEach(["°C", "°F"], id: \.self) { unit in
-                        Button(unit) { temperatureUnit = unit }
-                    }
-                } label: { Text("Temperature: \(temperatureUnit)") }
-                    .menuStyle(.borderlessButton).fixedSize()
             }.padding(.top, 6)
-        }.font(.caption).modifier(DashboardCardStyle())
+        }.font(.callout.weight(.medium)).modifier(DashboardCardStyle())
     }
     private func formatted(_ metric: BatteryInformation.Metric) -> String {
         guard let value = information.samples[metric]?.value else { return "Unavailable" }
@@ -183,7 +169,7 @@ struct ChargingPane: View {
                     })).toggleStyle(.switch)
                     chargingSlider("Charge Limit", floor: false, range: 80...100)
                     chargingSlider("Discharge Reserve", floor: true, range: 0...20)
-                    Text("Stops discharging at the reserve level.").font(.caption).foregroundStyle(.secondary)
+                    Text("Stops discharging at the reserve level.").font(.caption).foregroundStyle(.secondary).opacity(draft.value?.mode == 1 ? 1 : 0.45)
                 }.padding(8)
             }.disabled(!bluetooth.healthySettings.valid || bluetooth.settingsBusy)
             if !bluetooth.healthySettings.valid { Text("Connect to read recognized charging settings.").foregroundStyle(.secondary) }
@@ -205,7 +191,7 @@ struct ChargingPane: View {
             HStack { ForEach(stride(from: Int(range.lowerBound), through: Int(range.upperBound), by: 5).map { $0 }, id: \.self) { tick in
                 Text("\(tick)%").font(.caption2); if tick != Int(range.upperBound) { Spacer() }
             } }
-        }
+        }.disabled(draft.value?.mode != 1).opacity(draft.value?.mode == 1 ? 1 : 0.45)
     }
     private func paneActions(phase: PanePhase) -> some View {
         HStack {
@@ -220,16 +206,13 @@ struct ChargingPane: View {
 struct ScreenPane: View {
     @ObservedObject var bluetooth: BluetoothManager
     @State private var draft = SettingsDraft<[ScreenField: UInt32]>()
-    @State private var artwork = false
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             settingsGroup("Display", [.duration, .brightness])
             settingsGroup("Clock", [.clockEnabled, .clockFormat, .clockDuration, .chargingClockDuration])
-            settingsGroup("Screen Art", [.artEnabled, .artDuration])
-            Button("Customize artwork…") { artwork = true }
-                .sheet(isPresented: $artwork) {
-                    VStack { ArtworkEditor(); HStack { Spacer(); Button("Done") { artwork = false } } }.padding().frame(width: 580)
-                }
+            Text("Somnoire uses the clock artwork already on your power bank. Change it in the official EcoFlow app.").font(.caption).foregroundStyle(.secondary)
+            Text("Set your power bank’s time in the official EcoFlow app.").font(.caption).foregroundStyle(.secondary)
+            Link("Official EcoFlow app: time, artwork, sharing and firmware", destination: URL(string: "https://www.ecoflow.com/us/app-download")!)
             HStack {
                 Text(paneFeedback(local: draft.phase, dirty: draft.dirty, transaction: bluetooth.panePhases[.screen]).message).font(.caption).foregroundStyle(.secondary)
                 Spacer()
@@ -254,7 +237,7 @@ struct ScreenPane: View {
                             Slider(value: Binding(get: { Double(value) }, set: { update(field, UInt32($0)) }), in: 0...100, step: 1).accessibilityLabel("Brightness")
                             Image(systemName: "sun.max")
                             Text("\(value)%").monospacedDigit().frame(width: 38)
-                        } else if field == .artEnabled || field == .clockEnabled {
+                        } else if field == .clockEnabled {
                             Toggle(field.label, isOn: Binding(get: { value == 1 }, set: { update(field, $0 ? 1 : 2) })).labelsHidden().toggleStyle(.switch)
                         } else {
                             Picker(field.label, selection: Binding(get: { value }, set: { update(field, $0) })) {
@@ -622,118 +605,98 @@ struct SomnoireDiagnosticsView: View {
 
 struct SomnoireSettingsView: View {
     @ObservedObject var bluetooth: BluetoothManager
-    @State private var identity = ""
     @State var pane = 2
     var resize: (Int) -> Void = { _ in }
     var body: some View {
-        VStack {
-            Picker("Settings pane", selection: $pane) { Text("General").tag(2); Text("Charging").tag(0); Text("Screen").tag(1) }
-                .pickerStyle(.segmented).labelsHidden().padding([.horizontal, .top])
-            ZStack {
-                ScrollView { GeneralPane(bluetooth: bluetooth).padding(16) }
-                    .opacity(pane == 2 ? 1 : 0).disabled(pane != 2).accessibilityHidden(pane != 2)
-                ScrollView { ChargingPane(bluetooth: bluetooth).padding(16) }
-                    .opacity(pane == 0 ? 1 : 0).disabled(pane != 0).accessibilityHidden(pane != 0)
-                ScrollView { ScreenPane(bluetooth: bluetooth).padding(16) }
-                    .opacity(pane == 1 ? 1 : 0).disabled(pane != 1).accessibilityHidden(pane != 1)
-            }
-            HStack {
-                Text(bluetooth.liveStatus.label).font(.caption).foregroundStyle(.secondary)
-                if bluetooth.hasLiveCredential && bluetooth.liveStatus != .live && !bluetooth.isProbing {
-                    Button("Retry") { bluetooth.startLive() }
+        HSplitView {
+            List {
+                sidebarItem("General", icon: "gearshape", id: 2)
+                sidebarItem("Alerts", icon: "bell", id: 3)
+                if bluetooth.appMode == .fullReadings {
+                    sidebarItem("Charging", icon: "battery.100.bolt", id: 0)
+                    sidebarItem("Screen", icon: "display", id: 1)
                 }
-                if bluetooth.settingsStatus == .notConfirmed || bluetooth.settingsStatus == .partial { Button("Refresh") { bluetooth.disconnect() } }
-                Spacer()
-                Button("Done") { NSApplication.shared.keyWindow?.performClose(nil) }.keyboardShortcut(.defaultAction)
-            }.padding()
-        }.frame(minWidth: 520, minHeight: 340)
-        .onChange(of: pane) { resize($0) }
+                sidebarItem("About", icon: "info.circle", id: 4)
+            }.listStyle(.sidebar).frame(minWidth: 170, idealWidth: 190, maxWidth: 220)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(pane == 0 ? "Charging" : pane == 1 ? "Screen" : pane == 3 ? "Alerts" : pane == 4 ? "About" : "General").font(.title2.bold()).padding(20)
+                ZStack(alignment: .topLeading) {
+                    ScrollView { AboutPane().padding(20) }.opacity(pane == 4 ? 1 : 0).disabled(pane != 4).accessibilityHidden(pane != 4)
+                    ScrollView { AlertsPane(alerts: bluetooth.alerts).padding(20) }.opacity(pane == 3 ? 1 : 0).disabled(pane != 3).accessibilityHidden(pane != 3)
+                    ScrollView { GeneralPane(bluetooth: bluetooth).padding(20) }.opacity(pane == 2 ? 1 : 0).disabled(pane != 2).accessibilityHidden(pane != 2)
+                    if bluetooth.appMode == .fullReadings {
+                        ScrollView { ChargingPane(bluetooth: bluetooth).padding(20) }.opacity(pane == 0 ? 1 : 0).disabled(pane != 0).accessibilityHidden(pane != 0)
+                        ScrollView { ScreenPane(bluetooth: bluetooth).padding(20) }.opacity(pane == 1 ? 1 : 0).disabled(pane != 1).accessibilityHidden(pane != 1)
+                    }
+                }
+                Divider()
+                HStack {
+                    if pane == 2 {
+                        Text(bluetooth.appMode == .percentageOnly ? bluetooth.monitoring.status : bluetooth.liveStatus == .live ? "Connected to your EcoFlow." : bluetooth.liveStatus.label).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Done") { NSApplication.shared.keyWindow?.performClose(nil) }.keyboardShortcut(.defaultAction)
+                }.padding(16)
+            }.frame(minWidth: 460).background(Color(nsColor: .windowBackgroundColor))
+        }.frame(minWidth: 680, minHeight: 500)
+        .onChange(of: bluetooth.appMode) { _ in pane = 2 }
+    }
+    private func sidebarItem(_ title: String, icon: String, id: Int) -> some View {
+        Button { pane = id } label: {
+            Label(title, systemImage: icon).frame(maxWidth: .infinity, alignment: .leading).padding(8)
+                .foregroundStyle(pane == id ? Color.white : Color.primary)
+                .background(pane == id ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+        }.buttonStyle(.plain)
     }
 }
-struct ArtworkEditor: View {
-    @State private var source: CGImage?
-    @State private var zoom = 1.0
-    @State private var x = 0.0
-    @State private var y = 0.0
-    @State private var message: String?
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Custom screen art").font(.headline)
-            Button("Choose PNG or JPEG…", action: choose)
-            if let source, let preview = ArtworkCodec.crop(source, zoom: zoom, x: x, y: y) {
-                HStack(alignment: .top, spacing: 20) {
-                Image(nsImage: NSImage(cgImage: preview, size: NSSize(width: 240, height: 240)))
-                    .resizable().interpolation(.high).frame(width: 240, height: 240).accessibilityLabel("240 by 240 artwork preview")
-                VStack(alignment: .leading, spacing: 12) {
-                Slider(value: $zoom, in: 1...4) { Text("Zoom") }
-                Slider(value: $x, in: -1...1) { Text("Horizontal crop") }
-                Slider(value: $y, in: -1...1) { Text("Vertical crop") }
-                Text("240 × 240 pixels · local preview").font(.caption)
-                Button("Upload") {}.disabled(true)
-                Button("Clear") { self.source = nil; message = nil }
-                }
-                }
-            }
-            Text(message ?? "Preview is available. Artwork upload is not available in this build.")
-                .font(.caption).foregroundStyle(.secondary)
-        }.modifier(DashboardCardStyle())
-    }
-    private func choose() {
-        let panel = NSOpenPanel(); panel.allowedContentTypes = [.png, .jpeg]; panel.allowsMultipleSelection = false
-        guard let window = NSApplication.shared.keyWindow else { return }
-        panel.beginSheetModal(for: window) { result in
-            guard result == .OK, let url = panel.url else { return }
-            let accessed = url.startAccessingSecurityScopedResource(); defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-            guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  let image = ArtworkCodec.normalized(imageSource) else {
-                message = "This image could not be decoded."; return
-            }
-            source = image; zoom = 1; x = 0; y = 0; message = nil
-        }
-    }
-}
-enum ArtworkCodec {
-    static func normalized(_ source: CGImageSource) -> CGImage? {
-        CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: 2048] as CFDictionary)
-    }
-    static func crop(_ source: CGImage, zoom: Double, x: Double, y: Double) -> CGImage? {
-        guard let context = CGContext(data: nil, width: 240, height: 240, bitsPerComponent: 8, bytesPerRow: 960,
-            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        context.setFillColor(CGColor(gray: 0, alpha: 1)); context.fill(CGRect(x: 0, y: 0, width: 240, height: 240))
-        let scale = max(240 / Double(source.width), 240 / Double(source.height)) * min(4, max(1, zoom))
-        let w = Double(source.width) * scale, h = Double(source.height) * scale
-        context.interpolationQuality = .high
-        context.draw(source, in: CGRect(x: (240-w)/2 + x*(w-240)/2, y: (240-h)/2 + y*(h-240)/2, width: w, height: h))
-        return context.makeImage()
-    }
-    static func package(rgba: [UInt8], id: String) -> Data? {
-        guard rgba.count == 240*240*4, id.utf8.count <= 32, id.utf8.allSatisfy({ $0 >= 32 && $0 < 127 }) else { return nil }
-        var result = Data()
-        func big(_ value: UInt32) { result.append(contentsOf: [UInt8(value >> 24), UInt8((value >> 16)&255), UInt8((value >> 8)&255), UInt8(value&255)]) }
-        big(2); big(4); big(4)
-        result.append(contentsOf: Array(repeating: 0, count: 32-id.utf8.count)); result.append(contentsOf: id.utf8)
-        big(0); big(1); big(3); big(1); big(72); big(115204); big(1442735868)
-        let header: UInt32 = 4 | (240 << 10) | (240 << 21)
-        for i in 0..<4 { result.append(UInt8((header >> (i*8))&255)) }
-        for i in stride(from: 0, to: rgba.count, by: 4) {
-            let r = min(248, Int((Double(rgba[i])/8).rounded())*8)
-            let g = min(252, Int((Double(rgba[i+1])/4).rounded())*4)
-            let b = min(248, Int((Double(rgba[i+2])/8).rounded())*8)
-            let pixel = UInt16((r << 8) | (g << 3) | (b >> 3))
-            result.append(UInt8(pixel&255)); result.append(UInt8(pixel>>8))
-        }
-        return result
-    }
-}
-
 @MainActor
 struct GeneralPane: View {
     @ObservedObject var bluetooth: BluetoothManager
     @State private var identity = ""
+    @State private var setupHelp = false
+    @AppStorage("percentagePrecision") private var decimalPlaces = 0
+    @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
+    @AppStorage("menuBarStyle") private var iconStyle = MenuBarStyle.default.rawValue
+    @AppStorage("energyDisplayUnit") private var energyUnit = "Auto"
+    @AppStorage("temperatureDisplayUnit") private var temperatureUnit = "°C"
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            GroupBox("Appearance") {
+                VStack(spacing: 12) {
+                    Picker("Appearance", selection: $appearance) { ForEach(AppAppearance.allCases, id: \.rawValue) { Text($0.rawValue).tag($0.rawValue) } }
+                    Divider()
+                    Picker("Menu bar icon", selection: $iconStyle) { ForEach(MenuBarStyle.allCases, id: \.rawValue) { Text($0.rawValue).tag($0.rawValue) } }
+                }.padding(8)
+            }
+            GroupBox("Battery Monitoring") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle("Monitor Battery", isOn: Binding(get: { bluetooth.monitoringEnabled }, set: { if $0 { bluetooth.startMonitoring() } else { bluetooth.pauseMonitoring() } }))
+                    Divider()
+                    Picker("Percentage decimal places", selection: $decimalPlaces) { ForEach(PercentagePrecision.allCases, id: \.rawValue) { Text(String($0.rawValue)).tag($0.rawValue) } }
+                    Text("Shows up to the chosen decimal places when the bank reports fractions. Advertisements report whole percentages. More digits do not guarantee greater measurement accuracy.").font(.caption).foregroundStyle(.secondary)
+                }.padding(8)
+            }
+            Button("Open setup guide") { (NSApplication.shared.delegate as? SomnoireAppDelegate)?.openOnboarding() }
+            GroupBox("Experience") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("Show", selection: Binding(get: { bluetooth.appMode }, set: { bluetooth.setAppMode($0) })) {
+                        Text("Battery percentage only").tag(AppMode.percentageOnly)
+                        Text("Full readings").tag(AppMode.fullReadings)
+                    }
+                    Text("Percentage monitoring needs no account. Full readings and device settings require a one-time EcoFlow account ID.").font(.caption).foregroundStyle(.secondary)
+                }.padding(8)
+            }
+            if bluetooth.appMode == .fullReadings {
+                GroupBox("Units") {
+                    VStack(spacing: 12) {
+                        Picker("Energy", selection: $energyUnit) { ForEach(["Auto", "Wh", "kWh"], id: \.self) { Text($0) } }
+                        Divider()
+                        Picker("Temperature", selection: $temperatureUnit) { ForEach(["°C", "°F"], id: \.self) { Text($0) } }
+                    }.padding(8)
+                }
+            }
             GroupBox("Power Bank") {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(bluetooth.selectedTargetID == nil ? "Choose your nearby power bank to get started." : "Your selected power bank is remembered on this Mac.")
@@ -748,11 +711,16 @@ struct GeneralPane: View {
                         Button("Find Power Banks") { bluetooth.choosePowerBank() }
                         Button("Forget Bank") { bluetooth.forgetPowerBank() }.disabled(bluetooth.selectedTargetID == nil)
                     }
-                    if bluetooth.selectedTargetID != nil && !bluetooth.hasLiveCredential {
-                        Text("Account-free access is not established for this bank. Use your numeric EcoFlow account ID once to connect locally. Your password is never needed.").font(.caption).foregroundStyle(.secondary)
+                    if bluetooth.appMode == .fullReadings && bluetooth.selectedTargetID != nil && !bluetooth.hasLiveCredential {
+                        Text("Full readings require one-time EcoFlow account setup; everyday operation remains local.").font(.caption).foregroundStyle(.secondary)
+                        Button("First-time setup") { setupHelp = true }
+                            .sheet(isPresented: $setupHelp) { FirstTimeSetupSheet() }
                         SecureField("Numeric EcoFlow account ID", text: $identity).textFieldStyle(.roundedBorder)
                         Button("Connect") { bluetooth.startLive(userID: identity); identity = "" }
-                            .disabled(identity.isEmpty || bluetooth.isProbing)
+                            .disabled(!validEcoFlowID(identity) || bluetooth.isProbing)
+                    }
+                    if bluetooth.appMode == .fullReadings && bluetooth.hasLiveCredential && bluetooth.liveStatus != .live && !bluetooth.isProbing {
+                        Button("Retry") { bluetooth.startLive() }
                     }
                     if let notice = bluetooth.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
@@ -772,11 +740,166 @@ struct GeneralPane: View {
                     if let loginError { Text(loginError).font(.caption).foregroundStyle(.secondary) }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
             }
-            DisclosureGroup("Advanced") {
-                Button("Diagnostics…") { (NSApplication.shared.delegate as? SomnoireAppDelegate)?.openDiagnostics() }
-            }
         }
         .onAppear { loginStatus = SMAppService.mainApp.status }
         .onDisappear { identity = "" }
+    }
+}
+
+func validEcoFlowID(_ value: String) -> Bool {
+    !value.isEmpty && value.utf8.count <= 32 && value.utf8.allSatisfy { (48...57).contains($0) }
+}
+struct FirstTimeSetupSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    static let steps = [
+        "1. Install the official EcoFlow phone app. Sign in or create an account using the correct country/region.",
+        "2. If your bank is already linked, use its existing authorizing account. Otherwise complete first-time setup in the official app.",
+        "3. On your Mac, open your regional EcoFlow website. Open the browser’s Developer Tools → Network before signing in with that same account. Filter for pages/web/create and inspect its request payload for user_id. US/Canada reports use shopify-na; European reports use shopify-eu. Copy only the numeric ID. Regional behavior varies: if absent, consult the retrieval guide below. A website ID is a candidate until your bank accepts it.",
+        "4. Close the official app’s Bluetooth connection. In Somnoire, find and select your bank, paste only the numeric ID, and click Connect. Never paste your password, a login token, or the whole response.",
+        "5. After connection succeeds, quit and reopen Somnoire to check remembered access. Only the derived bank credential is stored in this Mac’s Keychain; the ID is cleared after use."
+    ]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("First-time setup").font(.title2)
+            ScrollView { VStack(alignment: .leading, spacing: 14) {
+                ForEach(Self.steps, id: \.self) { Text($0).frame(maxWidth: .infinity, alignment: .leading) }
+                Link("Install the official EcoFlow app", destination: URL(string: "https://www.ecoflow.com/us/app-download")!)
+                Text("Browser retrieval is community-documented and varies by region.").font(.caption).foregroundStyle(.secondary)
+                Link("Account-ID retrieval guide and regional updates", destination: URL(string: "https://github.com/rabits/ha-ef-ble/issues/130")!)
+            } }
+            HStack { Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
+        }.padding(24).frame(width: 560, height: 530)
+    }
+}
+
+struct AlertsPane: View {
+    @ObservedObject var alerts: LowBatteryAlerts
+    var body: some View {
+        GroupBox("Low battery") {
+            VStack(alignment: .leading, spacing: 14) {
+                Toggle("Low battery alerts", isOn: Binding(get: { alerts.enabled }, set: { alerts.setEnabled($0) })).toggleStyle(.switch)
+                Divider()
+                Picker("Notify at", selection: $alerts.threshold) { ForEach(LowBatteryPolicy.thresholds, id: \.self) { Text("\($0)%").tag($0) } }.disabled(!alerts.enabled)
+                Text(alerts.status).font(.caption).foregroundStyle(.secondary)
+                Text("One notification per low-battery event. This requires Somnoire running, battery monitoring enabled, and the bank nearby. Monitoring pauses during sleep.").font(.caption).foregroundStyle(.secondary)
+                Button("Send test notification") { alerts.test() }.disabled(!alerts.enabled)
+            }.padding(8)
+        }.onAppear { alerts.refresh() }
+    }
+}
+
+struct AppAppearanceStyle: ViewModifier {
+    @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
+    func body(content: Content) -> some View {
+        content.preferredColorScheme(appearance == "Light" ? .light : appearance == "Dark" ? .dark : nil)
+    }
+}
+struct AppIdentityIcon: View {
+    var size: CGFloat = 96
+    var body: some View { Image(nsImage: NSImage(named: "AppIcon") ?? NSImage(named: NSImage.applicationIconName) ?? NSImage(size: NSSize(width: 128, height: 128))).resizable().interpolation(.high).scaledToFit().frame(width: size, height: size) }
+}
+@MainActor
+final class AboutSession: ObservableObject {
+    static let shared = AboutSession()
+    @Published var unlock = DiagnosticsUnlock()
+}
+struct AboutPane: View {
+    @ObservedObject private var session = AboutSession.shared
+    @State private var activated = false
+    var body: some View {
+        VStack(spacing: 16) {
+            Button { if session.unlock.activate() { activated = true } } label: { AppIdentityIcon(size: 120) }.buttonStyle(.plain).accessibilityLabel("Somnoire app icon")
+            Text("Somnoire").font(.largeTitle.bold())
+            Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))").foregroundStyle(.secondary)
+            Text("Your power bank, quietly nearby.").font(.title3)
+            Text("Battery monitoring and optional full readings over Bluetooth. Everyday operation stays local on your Mac.").multilineTextAlignment(.center).foregroundStyle(.secondary)
+            Link("Somnoire on GitHub", destination: URL(string: "https://github.com/Kusanalee/Somnoire")!)
+            Button("Check for Updates") { NSWorkspace.shared.open(URL(string: "https://github.com/Kusanalee/Somnoire/releases")!) }
+            if session.unlock.unlocked { Button("Open Diagnostics…") { (NSApplication.shared.delegate as? SomnoireAppDelegate)?.openDiagnostics() } }
+        }.frame(maxWidth: .infinity).padding(.vertical, 24)
+        .alert("Diagnostics activated.", isPresented: $activated) { Button("OK", role: .cancel) {} }
+    }
+}
+
+enum MenuBarArtwork {
+    static func nouNou(awake: Bool) -> NSImage {
+        let stem = awake ? "NouNouAwake" : "NouNouSleepy"
+        // Xcode combines the standard/Retina PNG pair into a multi-representation TIFF.
+        guard let url = Bundle.main.url(forResource: stem, withExtension: "tiff"), let image = NSImage(contentsOf: url) else { return NSImage(size: NSSize(width: 20, height: 20)) }
+        image.size = NSSize(width: 20, height: 20)
+        image.isTemplate = false; return image
+    }
+}
+
+struct OnboardingView: View {
+    @ObservedObject var bluetooth: BluetoothManager
+    @AppStorage("onboardingStep") private var savedStep = OnboardingStep.welcome.rawValue
+    @State private var identity = ""
+    @State private var help = false
+    var close: () -> Void = {}
+    private var step: OnboardingStep { OnboardingStep(rawValue: savedStep) ?? .welcome }
+    var body: some View {
+        VStack(spacing: 20) {
+            AppIdentityIcon(size: step == .welcome ? 110 : 64)
+            Text(title).font(.largeTitle.bold()).multilineTextAlignment(.center)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    switch step {
+                    case .welcome:
+                        Text("Keep an eye on your power bank from your Mac’s menu bar. Somnoire works locally over Bluetooth.")
+                        Text("Let’s get you set up.").foregroundStyle(.secondary)
+                    case .experience:
+                        Picker("Your experience", selection: Binding(get: { bluetooth.appMode }, set: { bluetooth.setAppMode($0) })) {
+                            Text("Battery percentage only").tag(AppMode.percentageOnly)
+                            Text("Full readings").tag(AppMode.fullReadings)
+                        }
+                        Text("Percentage monitoring needs no account. Full readings adds wattage and device settings using a one-time numeric EcoFlow account ID.").foregroundStyle(.secondary)
+                    case .bank:
+                        Text("Keep your power bank awake and nearby. Allow Bluetooth access when macOS asks.")
+                        Text(bluetooth.availability == .ready ? bluetooth.monitoring.status : bluetooth.availability.rawValue).foregroundStyle(.secondary)
+                        ForEach(bluetooth.devices.filter { $0.advertisement.matchesObservedRapidProProfile }) { device in
+                            HStack { Text(device.name); Spacer(); Button(device.id == bluetooth.selectedTargetID ? "Selected" : "Select") { bluetooth.selectPowerBank(device.id) }.disabled(device.id == bluetooth.selectedTargetID) }
+                        }
+                        if bluetooth.devices.isEmpty { Text("No power banks found yet. Turn on Bluetooth and wake your bank, then try again.").font(.callout).foregroundStyle(.secondary) }
+                        Button("Find Power Banks") { bluetooth.startMonitoring(); bluetooth.choosePowerBank() }
+                    case .access:
+                        Text("Close the official app’s Bluetooth connection, then enter the numeric ID from your bank’s authorizing account. Your password and login tokens stay outside Somnoire.")
+                        Button("How to find your account ID") { help = true }
+                        SecureField("Numeric EcoFlow account ID", text: $identity).textFieldStyle(.roundedBorder)
+                        HStack {
+                            Button("Connect") { bluetooth.startLive(userID: identity); identity = "" }.disabled(!validEcoFlowID(identity) || bluetooth.isProbing)
+                            if bluetooth.hasLiveCredential { Button("Use saved access") { bluetooth.startLive() }.disabled(bluetooth.isProbing) }
+                        }
+                        Text(bluetooth.liveStatus.label).foregroundStyle(.secondary)
+                        if let notice = bluetooth.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
+                        Button("Use percentage only") { bluetooth.setAppMode(.percentageOnly); savedStep = OnboardingStep.ready.rawValue }
+                    case .ready:
+                        Text(bluetooth.appMode == .percentageOnly ? "Your percentage will appear in the menu bar when the bank broadcasts nearby." : "Full readings are ready. Somnoire remembers access in this Mac’s Keychain.")
+                        Text("Open Settings from the dashboard’s gear menu anytime. Monitoring runs while Somnoire is open and your Mac is awake.").foregroundStyle(.secondary)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            HStack {
+                if step != .welcome { Button("Back") { identity = ""; savedStep = step.previous(mode: bluetooth.appMode).rawValue } }
+                Button("Set Up Later") { identity = ""; close() }
+                Spacer()
+                Button(step == .ready ? "Get Started" : "Continue") { advance() }.keyboardShortcut(.defaultAction)
+                    .disabled(!step.canAdvance(hasBank: bluetooth.selectedTargetID != nil, live: bluetooth.liveStatus == .live))
+            }
+        }.padding(32).frame(minWidth: 520, minHeight: 540).background(Color(nsColor: .windowBackgroundColor))
+        .sheet(isPresented: $help) { FirstTimeSetupSheet().modifier(AppAppearanceStyle()) }
+        .onChange(of: bluetooth.liveStatus) { status in if step == .access && status == .live { savedStep = OnboardingStep.ready.rawValue } }
+        .onDisappear { identity = "" }
+    }
+    private var title: String {
+        switch step { case .welcome: return "Welcome to Somnoire"; case .experience: return "Make it yours"; case .bank: return "Find your power bank"; case .access: return "Connect for full readings"; case .ready: return "You’re ready" }
+    }
+    private func advance() {
+        identity = ""
+        if step == .ready { UserDefaults.standard.set(true, forKey: "onboardingComplete"); close(); return }
+        let previous = step
+        savedStep = step.next(mode: bluetooth.appMode).rawValue
+        if previous == .experience { bluetooth.startMonitoring(); bluetooth.choosePowerBank() }
+        if previous == .bank && bluetooth.appMode == .fullReadings { bluetooth.startLive() }
     }
 }

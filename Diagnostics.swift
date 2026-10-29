@@ -3,6 +3,7 @@ import Foundation
 // No free-form names, advertisements, error descriptions, or packet bodies enter
 // this log. Export is built from typed fields, never by redacting rendered text.
 enum DiagnosticKind: String {
+    case clockSync = "Clock sync diagnostic"
     case monitoringStarted = "Automatic monitoring enabled", monitoringPaused = "Automatic monitoring paused", targetSelected = "Power bank selected"
     case advertisedBattery = "Advertisement battery decoding"
     case unrelatedStatus = "Valid unrelated encrypted packet discarded"
@@ -27,6 +28,7 @@ enum DiagnosticKind: String {
 enum DiagnosticSeverity: String { case info, warning, error }
 enum DiagnosticCounter: String { case services, characteristics, bytes, advertisedServices, serviceDataEntries, milliseconds, observedPackets, telemetryPackets, portPowerUpdates }
 enum DiagnosticField: Equatable {
+    case clockSync(ClockSyncOutcome)
     case advertisedBattery(AdvertisedBatteryOutcome)
     case probeKind(ProbeKind)
     case probeStage(ProbeStage)
@@ -50,6 +52,7 @@ enum DiagnosticField: Equatable {
 
     var text: String {
         switch self {
+        case .clockSync(let outcome): return outcome.label
         case .advertisedBattery(let outcome): return "source=advertisement · \(outcome.rawValue)"
         case .probeKind(let kind): return "probe=\(kind.rawValue)"
         case .probeStage(let stage): return "stage=\(stage.rawValue)"

@@ -23,6 +23,9 @@ struct P512PortMeasurement: Equatable {
 }
 
 struct P512TelemetryDelta: Equatable {
+    var timezoneOffset: Int32?
+    var timezoneID: String?
+    var timezoneAutomatic: Bool?
     var batteryPercentage: Float?
     var rejectedBattery: TelemetryValidationSummary?
     var screen: [ScreenField: UInt32] = [:]
@@ -56,6 +59,9 @@ struct P512TelemetryDelta: Equatable {
         } else if let health = update.health {
             result.health = health; result.rejectedHealth = nil
         }
+        result.timezoneOffset = update.timezoneOffset ?? timezoneOffset
+        result.timezoneID = update.timezoneID ?? timezoneID
+        result.timezoneAutomatic = update.timezoneAutomatic ?? timezoneAutomatic
         result.screen.merge(update.screen) { _, new in new }
         result.healthyMode = update.healthyMode ?? healthyMode
         result.chargeCeiling = update.chargeCeiling ?? chargeCeiling
@@ -108,6 +114,16 @@ enum P512TelemetryDecoder {
                     result.ports[port] = result.ports[port]?.merging(value) ?? value
                 } else {
                     switch field {
+                    case 133:
+                        guard wire == 0 else { throw P512TelemetryError.wrongWireType }
+                        let value = try cursor.varint()
+                        guard value <= UInt64(Int32.max) || value >= UInt64.max - UInt64(Int32.max) else { throw P512TelemetryError.invalidValue }
+                        result.timezoneOffset = Int32(truncatingIfNeeded: value)
+                    case 134: result.timezoneID = try cursor.string(wire: wire)
+                    case 135:
+                        let value = try cursor.uint32(wire: wire)
+                        guard value <= 1 else { throw P512TelemetryError.invalidValue }
+                        result.timezoneAutomatic = value == 1
                     case 3: result.inputWatts = try cursor.float(wire: wire)
                     case 4: result.outputWatts = try cursor.float(wire: wire)
                     case 262:
@@ -204,6 +220,12 @@ enum P512TelemetryDecoder {
             guard field > 0, field <= 0x1FFF_FFFF else { throw P512TelemetryError.malformed }
             return (Int(field), UInt8(key & 7))
         }
+        mutating func string(wire: UInt8) throws -> String {
+            guard wire == 2 else { throw P512TelemetryError.wrongWireType }
+            let bytes = try lengthDelimited()
+            guard bytes.count <= 128, let value = String(bytes: bytes, encoding: .utf8) else { throw P512TelemetryError.invalidValue }
+            return value
+        }
         mutating func uint32(wire: UInt8) throws -> UInt32 {
             guard wire == 0 else { throw P512TelemetryError.wrongWireType }
             let value = try varint()
@@ -282,25 +304,29 @@ struct BatteryInformation {
 }
 
 struct HealthySettings: Equatable {
+    var timezone = ClockReadback()
     var screen: [ScreenField: UInt32] = [:]
     var mode: UInt32?
     var ceiling: UInt32?
     var floor: UInt32?
     var valid: Bool { (mode == 1 || mode == 2) && ceiling.map { (80...100).contains($0) } == true && floor.map { $0 <= 20 } == true }
     mutating func receive(_ delta: P512TelemetryDelta) {
+        timezone.receive(delta)
         screen.merge(delta.screen) { _, new in new }
         mode = delta.healthyMode ?? mode; ceiling = delta.chargeCeiling ?? ceiling; floor = delta.dischargeFloor ?? floor
     }
     func matches(_ change: HealthyChange) -> Bool {
-        change.screen.allSatisfy { screen[$0.key] == $0.value } && (change.mode == nil || change.mode == mode) && (change.ceiling == nil || change.ceiling == ceiling) && (change.floor == nil || change.floor == floor)
+        (change.clock.map { timezone.timezoneOffset == $0.offset && timezone.timezoneID == $0.zone && timezone.timezoneAutomatic == true } ?? true) && change.screen.allSatisfy { screen[$0.key] == $0.value } && (change.mode == nil || change.mode == mode) && (change.ceiling == nil || change.ceiling == ceiling) && (change.floor == nil || change.floor == floor)
     }
 }
 struct HealthyChange {
+    var clock: ClockSyncRequest?
     var screen: [ScreenField: UInt32] = [:]
     var mode: UInt32?
     var ceiling: UInt32?
     var floor: UInt32?
     var valid: Bool {
+        if let clock { return clock.valid && screen.isEmpty && mode == nil && ceiling == nil && floor == nil }
         if !screen.isEmpty { return screen.count == 1 && mode == nil && ceiling == nil && floor == nil && screen.allSatisfy { $0.key.accepts($0.value) } }
         return
         (mode == nil || mode == 1 || mode == 2) && (ceiling == nil || (80...100).contains(ceiling!)) &&
@@ -309,14 +335,12 @@ struct HealthyChange {
 }
 
 enum ScreenField: Int, CaseIterable {
-    case duration = 18, brightness = 5, artEnabled = 822, artDuration = 823
+    case duration = 18, brightness = 5
     case clockEnabled = 825, clockDuration = 826, clockFormat = 827, chargingClockDuration = 1259
     var writeField: UInt32 {
         switch self {
         case .duration: return 12
         case .brightness: return 14
-        case .artEnabled: return 301
-        case .artDuration: return 302
         case .clockEnabled: return 304
         case .clockDuration: return 305
         case .clockFormat: return 306
@@ -327,8 +351,6 @@ enum ScreenField: Int, CaseIterable {
         switch self {
         case .duration: return "Information display duration"
         case .brightness: return "Brightness"
-        case .artEnabled: return "Screen art"
-        case .artDuration: return "Artwork duration"
         case .clockEnabled: return "Clock"
         case .clockDuration: return "Clock duration on battery"
         case .clockFormat: return "Clock format"
@@ -339,7 +361,7 @@ enum ScreenField: Int, CaseIterable {
     func accepts(_ value: UInt32) -> Bool {
         switch self {
         case .brightness: return value <= 100
-        case .artEnabled, .clockEnabled, .clockFormat: return value == 1 || value == 2
+        case .clockEnabled, .clockFormat: return value == 1 || value == 2
         case .chargingClockDuration: return value == UInt32.max || Self.durations.contains(value)
         default: return Self.durations.contains(value)
         }
@@ -347,7 +369,7 @@ enum ScreenField: Int, CaseIterable {
     func text(_ value: UInt32) -> String {
         switch self {
         case .brightness: return "\(value)%"
-        case .artEnabled, .clockEnabled: return value == 1 ? "Enabled" : "Disabled"
+        case .clockEnabled: return value == 1 ? "Enabled" : "Disabled"
         case .clockFormat: return value == 1 ? "12-hour" : "24-hour"
         default: return value == UInt32.max ? "Never" : value < 60 ? "\(value) seconds" : "\(value/60) minutes"
         }
@@ -385,4 +407,49 @@ struct SettingsDraft<Value: Equatable> {
 func paneFeedback(local: PanePhase, dirty: Bool, transaction: PanePhase?) -> PanePhase {
     if let transaction, transaction == .applying || transaction == .partial || transaction == .notConfirmed { return transaction }
     return dirty ? local : transaction ?? local
+}
+
+// The installed Android helper encodes whole-hour offsets as hours * 100.
+// Fractional offsets are refused until their P512 representation is established.
+struct ClockSyncRequest: Equatable {
+    let utc: UInt32
+    let offset: Int32
+    let zone: String
+    var valid: Bool { (-1200...1400).contains(offset) && offset % 100 == 0 && !zone.isEmpty && zone.utf8.count <= 128 && zone.utf8.allSatisfy { (33...126).contains($0) } }
+    static func make(date: Date, timezone: TimeZone) -> Self? {
+        let seconds = timezone.secondsFromGMT(for: date)
+        guard seconds % 3600 == 0, let utc = UInt32(exactly: floor(date.timeIntervalSince1970)) else { return nil }
+        let request = Self(utc: utc, offset: Int32(seconds / 3600 * 100), zone: timezone.identifier)
+        return request.valid ? request : nil
+    }
+}
+
+struct ClockReadback: Equatable {
+    var timezoneOffset: Int32?
+    var timezoneID: String?
+    var timezoneAutomatic: Bool?
+    mutating func receive(_ delta: P512TelemetryDelta) {
+        timezoneOffset = delta.timezoneOffset ?? timezoneOffset
+        timezoneID = delta.timezoneID ?? timezoneID
+        timezoneAutomatic = delta.timezoneAutomatic ?? timezoneAutomatic
+    }
+    func outcome(for request: ClockSyncRequest) -> ClockSyncOutcome {
+        let present = (timezoneOffset != nil ? 1 : 0) | (timezoneID != nil ? 2 : 0) | (timezoneAutomatic != nil ? 4 : 0)
+        let matches = (timezoneOffset == request.offset ? 1 : 0) | (timezoneID == request.zone ? 2 : 0) | (timezoneAutomatic == true ? 4 : 0)
+        return present == 7 && matches == 7 ? .confirmed : .readback(present: present, matches: matches)
+    }
+}
+enum ClockSyncOutcome: Equatable {
+    case refused, sent, transportFailure, cancelled, confirmed
+    case readback(present: Int, matches: Int)
+    var label: String {
+        switch self {
+        case .refused: return "Clock request refused"
+        case .sent: return "Clock write completed; device acceptance unverified"
+        case .transportFailure: return "Clock transport failed"
+        case .cancelled: return "Clock sync cancelled"
+        case .confirmed: return "Timezone readback confirmed; physical clock comparison required"
+        case .readback(let present, let matches): return "Clock readback unconfirmed; presence=\(present), matching=\(matches)"
+        }
+    }
 }
