@@ -56,7 +56,7 @@ Somnoire is a lightweight, native macOS menu bar app for keeping an eye on suppo
 ### a gentler charging routine
 
 - **Healthy Charging:** enable the bank’s supported charging-limit mode. turning it off grays out both limit rows, so unavailable edits aren’t offered.
-- **charge limit and discharge reserve:** set a charge ceiling from 80% to 100% and a discharge reserve from 0% to 20%, in 5-point steps. physical cutoff behavior has not been independently validated.
+- **charge limit and discharge reserve:** set a charge ceiling from 80% to 100% and a discharge reserve from 0% to 20%, in 5-point steps. charging has been verified to stop at an 80% limit on the tested EcoFlow Rapid Pro 27,650 mAh.
 - **apply when you’re ready:** changes stay as drafts until Apply. Revert discards them; confirmed feedback uses the bank’s reported settings, and incomplete confirmation is shown rather than assumed successful.
 
 ### the bank’s display, your way
@@ -128,11 +128,12 @@ bank access uses a local, non-synchronizing Keychain credential. preferences and
 
 alerts are opt-in and silent. they need Somnoire running, monitoring enabled, and the bank nearby; monitoring pauses while your Mac sleeps. they don’t require an authenticated connection. the default threshold is 20%, with one notification per low-battery event; a fresh reading five points above the threshold rearms it.
 
-## a few things to know
+## limitations
 
+- hardware testing covers the EcoFlow Rapid Pro 27,650 mAh (internal model P512). other models may work, but they and other firmware remain untested. not every supported macOS version has been hardware-tested.
 - percentage monitoring is account-free; account-free **full readings and settings** have not been established for the tested linked bank.
 - Somnoire uses the clock artwork already installed on the bank. time setup, artwork changes, sharing, and firmware updates belong in the [official EcoFlow app](https://www.ecoflow.com/us/app-download). automatic local time sync and custom artwork upload are unavailable.
-- charging and screen controls have been user-tested, but physical charge/discharge cutoffs have not been independently validated. input-direction behavior and dock readings still have hardware-validation gaps.
+- the 80% charge cutoff has been verified on the tested bank. other charge-limit values and discharge-reserve cutoffs remain unverified; input-direction behavior and dock readings also have hardware-validation gaps.
 - three decimal places is a display preference, not a promise of greater accuracy. advertisements report whole percentages.
 - the tested local build retained Bluetooth permission across relaunches and a changed-build upgrade, and displayed the notification artwork on the test Mac. that isn’t a guarantee for every Mac or signing identity.
 
