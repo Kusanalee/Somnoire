@@ -176,7 +176,7 @@ with tempfile.TemporaryDirectory() as directory:
             body=vint(field<<3)+vint(value)
             screen_cases.append(dict(field=field,value=value,ciphertext=session_encrypt(packet(src=0x21,dst=2,cmdset=0xFE,cmd=0x11,seq=3,payload=body))))
         clock_cases=[]
-        for offset,zone in [(800,'Asia/Manila'),(-500,'America/New_York')]:
+        for offset,zone in [(800,'Asia/Taipei'),(-500,'America/New_York')]:
             body=vint(48)+vint(1800000000)+vint(56)+vint(offset & ((1<<64)-1))+vint(1082)+vint(len(zone))+zone.encode()+vint(1088)+vint(1)
             clock_cases.append(dict(offset=offset,zone=zone,ciphertext=session_encrypt(packet(src=0x21,dst=2,cmdset=0xFE,cmd=0x11,seq=3,payload=body))))
         vectors.append({'name':label,'local_private':local.to_bytes(21,'big').hex(),'peer_public':peer_public[-40:].hex(),'shared_secret':secret.hex(),

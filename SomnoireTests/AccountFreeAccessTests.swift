@@ -119,14 +119,14 @@ final class AuthenticatedAccessTests: XCTestCase {
         h.probe.writeCompleted(h.writes[4].0, success: true)
         var outcomes: [ClockSyncOutcome] = []
         h.probe.onClockSync = { outcomes.append($0) }
-        h.probe.applyHealthy(HealthyChange(clock: ClockSyncRequest(utc: 100, offset: 800, zone: "Asia/Manila"))) { _ in }
+        h.probe.applyHealthy(HealthyChange(clock: ClockSyncRequest(utc: 100, offset: 800, zone: "Asia/Taipei"))) { _ in }
         h.probe.cancelPaneSettings(); XCTAssertTrue(outcomes.isEmpty)
         h.probe.writeCompleted(h.writes.last!.0, success: true)
         XCTAssertEqual(outcomes, [.sent])
         h.probe.writeCompleted(h.writes.last!.0, success: true)
         h.clock.time = 6; h.probe.expire()
         XCTAssertEqual(outcomes.last, .readback(present: 0, matches: 0))
-        h.probe.applyHealthy(HealthyChange(clock: ClockSyncRequest(utc: 100, offset: 800, zone: "Asia/Manila"))) { _ in }
+        h.probe.applyHealthy(HealthyChange(clock: ClockSyncRequest(utc: 100, offset: 800, zone: "Asia/Taipei"))) { _ in }
         h.probe.cancelSettings(); XCTAssertEqual(outcomes.last, .cancelled)
     }
 
@@ -135,13 +135,13 @@ final class AuthenticatedAccessTests: XCTestCase {
         let h = AccessHarness(kind: .authenticatedAccess, live: true); h.status()
         h.probe.writeCompleted(h.writes[3].0, success: true); h.credentialReply(true)
         h.probe.writeCompleted(h.writes[4].0, success: true)
-        let request = ClockSyncRequest(utc: 100, offset: 800, zone: "Asia/Manila")
+        let request = ClockSyncRequest(utc: 100, offset: 800, zone: "Asia/Taipei")
         var result: Bool?, concurrent: Bool?
         h.probe.applyHealthy(HealthyChange(clock: request)) { result = $0 }
         h.probe.applyHealthy(HealthyChange(screen: [.brightness: 50])) { concurrent = $0 }
         XCTAssertEqual(concurrent, false)
         // 133=offset, 134=timezone ID, 135=automatic. Pre-ack data cannot confirm.
-        let payload = Data([0xa8,0x08,0xa0,0x06,0xb2,0x08,11] + Array("Asia/Manila".utf8) + [0xb8,0x08,1])
+        let payload = Data([0xa8,0x08,0xa0,0x06,0xb2,0x08,11] + Array("Asia/Taipei".utf8) + [0xb8,0x08,1])
         h.telemetry(payload); XCTAssertNil(result)
         h.probe.writeCompleted(h.writes.last!.0, success: true)
         h.probe.writeCompleted(h.writes.last!.0, success: true)
@@ -572,7 +572,7 @@ final class AuthenticatedAccessTests: XCTestCase {
             XCTAssertEqual(sn_probe_clock_request(context, 3, 1800000000, -500, "America/New_York", &clockOutput, 256, &clockLength), 1)
             XCTAssertGreaterThan(clockLength, 32)
             XCTAssertEqual(clockLength % 16, 0)
-            XCTAssertEqual(sn_probe_clock_request(context, 2, 1800000000, 800, "Asia/Manila", &clockOutput, 256, &clockLength), 0)
+            XCTAssertEqual(sn_probe_clock_request(context, 2, 1800000000, 800, "Asia/Taipei", &clockOutput, 256, &clockLength), 0)
             XCTAssertEqual(clockLength, 0); XCTAssertTrue(clockOutput.allSatisfy { $0 == 0 })
             XCTAssertEqual(sn_probe_clock_request(context, 3, 1800000000, 550, "Asia/Kolkata", &clockOutput, 256, &clockLength), 0)
             for item in vector.screen_cases {

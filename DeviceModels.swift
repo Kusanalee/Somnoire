@@ -120,7 +120,7 @@ enum AdvertisedBatteryOutcome: String {
 
 struct AdvertisedBatteryReading: Equatable {
     // Observed P512 profile matched the physical screen at 100% and 96%.
-    // Evidence and limitations are recorded in docs/Phase2A.md; not a universal layout.
+    // Evidence and limitations are recorded in docs/Research.md#phase-2a; not a universal layout.
     static let hardwareValidated = true
     let percentage: Int
     let observedAt: Date

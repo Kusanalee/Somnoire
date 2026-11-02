@@ -264,8 +264,8 @@
       "clock_cases": [
         {
           "offset": 800,
-          "zone": "Asia/Manila",
-          "ciphertext": "1b25e1f7d38f81911b845aaff27b2779bb8a633426b75553a43d44f4a5774c22e24396ee8c230917d80696953739aaf5"
+          "zone": "Asia/Taipei",
+          "ciphertext": "1b25e1f7d38f81911b845aaff27b2779bb8a633426b75553a43d44f4a5774c225dec4be756022e4928f1ba0eea1e1aca"
         },
         {
           "offset": -500,
@@ -911,8 +911,8 @@
       "clock_cases": [
         {
           "offset": 800,
-          "zone": "Asia/Manila",
-          "ciphertext": "eeb689cf870c251aeffd806fd64dd44c9ce2bea502c4df3445cfc2b753684b47204c00cd97d251d46ebf5aee0a26db59"
+          "zone": "Asia/Taipei",
+          "ciphertext": "eeb689cf870c251aeffd806fd64dd44c9ce2bea502c4df3445cfc2b753684b47d7acea6ad7c399790dda7337a2f82cb3"
         },
         {
           "offset": -500,

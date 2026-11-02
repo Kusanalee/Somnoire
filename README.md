@@ -150,10 +150,8 @@ Somnoire uses SwiftUI and CoreBluetooth. if you’re curious about how it works:
 - [installation and updates](docs/installation.md)
 - [build, sign, and test locally](docs/building.md)
 - [first-time account-ID setup](docs/first-time-setup.md)
-- [Bluetooth reverse-engineering research](docs/BLE-Research.md)
-- [P512 protocol implementation and current findings](docs/P512-Protocol.md)
-- [telemetry validation history](docs/Phase2E.md) and [earlier validation records](docs/Validation.md)
-- [test sources](SomnoireTests/) and [historical development notes](docs/)
+- [consolidated protocol research and validation history](docs/Research.md)
+- [test sources](SomnoireTests/)
 
 protocol research distinguishes decoded data from physical hardware checks. private captures, Android packages, credentials, and build artifacts stay out of the repository.
 

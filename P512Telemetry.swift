@@ -2,7 +2,7 @@ import Foundation
 
 // App-derived research decoder for explicit diagnostic probes only. Production
 // wattage UI remains gated on verified access and physical port mapping.
-// Evidence: docs/P512-Protocol.md. No generated or proprietary app code is bundled.
+// Evidence: docs/Research.md#p512-protocol. No generated or proprietary app code is bundled.
 enum P512ProtocolPort: Int, CaseIterable {
     case usbC1 = 852, usbC2 = 856, usbC3 = 853, usbC4 = 854, pogo = 857
 }
