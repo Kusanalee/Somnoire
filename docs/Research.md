@@ -29,8 +29,13 @@ For everyday use, see [installation](installation.md),
 
 ## Reading the record
 
+Personal namespaces, installation paths, observation dates, exact clock times,
+and device-history readings have been omitted or generalized. Public protocol
+identifiers, model names, software versions, and third-party citations remain
+where needed to interpret the findings.
+
 The sections below preserve the original technical findings, pinned references,
-checksums, experiment boundaries, and validation results. They are a historical
+experiment boundaries and validation results. They are a historical
 record, not a list of current product promises. Statements such as “unimplemented,”
 “pending,” or “release remains 0.11.0” describe their original checkpoint; later
 entries and the current-status summary take precedence. Test counts belong to
@@ -53,7 +58,6 @@ observations that support those later conclusions.
 - [Phase 2C: account-free telemetry research](#phase-2c)
 - [Phase 2D: account-free access experiment](#phase-2d)
 - [Phase 2E: authenticated telemetry and hardware checks](#phase-2e)
-
 
 <a id="p512-protocol"></a>
 
@@ -160,17 +164,12 @@ Still to establish on the actual bank:
 - Physical mapping of the four USB-C protocol fields and built-in cable.
 - Agreement of signs, units and updates with each loaded/unloaded port.
 
-### Reproducible local evidence
+### Static source evidence
 
-The user connected the previously used Android phone through its authorized debug
-connection. Only the installed `com.ecoflow` package files and package version
-metadata were read. Application code was inspected statically; no app/account
-storage, logs, session secrets or credentials were read. APKs and extracted assets
-remain ignored under `build/TelemetryResearch/`.
+Static inspection covered official application code and package version metadata.
+No account storage, logs, session secrets, or credentials were read. Application
+packages and extracted assets are not redistributed with this research.
 
-- Base APK SHA-256: `3deca87e4348b390e181e4d1407907adf7982d88feb0dda808cb4975832cfea1`.
-- `assets/bundle/RapidStudio.bundle` SHA-256:
-  `8ae3d66eb02c0b268670219613bcb00ca17cfa018f567920bd8c7d489673eed3`.
 - Bundle module suffix `35000617`: P512/P511 to PB501 mapping.
 - `35000683`: generated `DisplayPropertyUpload` and `UsbRealDisplayInfo` schema.
 - `35000689`: port-value conversion and one-decimal display rounding.
@@ -191,8 +190,7 @@ float32 payload, nonsequential port tags, signs, missing versus zero values,
 incremental/repeated-message merging, unknown fields, slices, truncation,
 varint/length limits, wrong wire types and invalid scalar values.
 
-Full suite: **59 passed**, five opt-in hardware checks skipped, zero failures
-(`build/P512SchemaTests.xcresult`). Live telemetry and physical port comparisons
+Full suite: **59 passed**, five opt-in hardware checks skipped, zero failures. Live telemetry and physical port comparisons
 remain unverified. The older capture may come from a different app version; the
 schema provenance above is specifically the installed 6.17.4.14 build.
 
@@ -206,7 +204,7 @@ provisioning remains a research design with no never-linked hardware validation.
 
 Phase 2E later confirmed repeated authenticated decoded sessions, including field
 852 at −22.9 W / 15.3 V / 1.5 A while charging from physical C1 (140W in/out),
-as identified by the user. Unloaded port fields were absent rather than explicitly
+as identified by the test operator. Unloaded port fields were absent rather than explicitly
 zero. Other ports, the built-in cable, input direction and bank-screen comparison
 remain unverified; the current results are in [Phase 2E](#phase-2e).
 
@@ -256,7 +254,7 @@ health outside 0–100 becomes unavailable with a typed warning; structural erro
 and existing nonfinite-power failures remain fatal. No health estimate or SOC
 clamping is introduced. Diagnostics export only allowlisted field presence and
 structural warnings, never measurement values. The local historical diagnostic
-preview displays the new measurements for user-assisted comparison.
+preview displays the new measurements for operator-assisted comparison.
 
 The dashboard uses device aggregate power directly with independent five-second
 expiry. Battery Information retains each field's own receipt time in memory for
@@ -304,8 +302,8 @@ with the official app in separate BLE sessions; then perform explicitly chosen
 Apply actions and readback comparisons. Only explicitly restore original values.
 No provisioning, reset, reporting-period changes or unrelated settings are added.
 
-The user confirmed the 0.7.0 Battery Information values against the official app:
-100% health, 35 cycles, 31°C, 2.730 kWh input and 2.124 kWh output. The log
+The 0.7.0 Battery Information health, cycle count, temperature, and energy
+counters were confirmed against the official app. The log
 shows field 102/263 updates about once per second; each is applied as received.
 Temperature is labelled live only while connected with a sample under five
 seconds old. Retained/stale values remain explicitly last-reported.
@@ -332,7 +330,7 @@ output on refusal. One explicit row Apply sends one changed field; no brightness
 writes occur while dragging. Fresh matching post-refresh FE/15 reports verify
 changes through the existing settings acknowledgement/readback state machine.
 Unknown reported values disable the relevant row. Current charging behavior is
-user-confirmed; physical charge cutoff is still not independently established.
+operator-confirmed; physical charge cutoff is still not independently established.
 
 Artwork module 35000731 establishes a P512 240×240 still-image format: rounded
 and saturated RGB565, little-endian pixels, a four-byte packed image descriptor,
@@ -410,7 +408,7 @@ and live acceptance remain outstanding rather than being represented as working.
 
 ### 0.12.0 investigation (not released)
 
-The user confirms remembered access works across relaunch. The remaining account
+The test operator confirms remembered access works across relaunch. The remaining account
 objective is first-time setup without an EcoFlow account ID.
 
 | Candidate | P512 evidence / required state | Authentication change | Outcome |
@@ -428,17 +426,17 @@ They do not establish request correlation themselves; tracing must continue in
 the protocol dispatch layer. The setup callback uses a seven-byte minimum and
 extracts its negotiated value from bytes 3..<7. These are static findings only.
 
-Android observation feasibility: one authorized Android 17 device is connected.
-The installed com.ecoflow package is not debuggable (run-as refused). The Bluetooth
+Android observation feasibility: the official application was not debuggable
+(run-as refused). The Bluetooth
 snoop directory is inaccessible to shell; no legacy shared-storage snoop file was
 present. A broad bugreport was not collected. The app's FileTransmitManager log
 calls delegate through t0 to an eq/a logger; whether that release logger exposes
 usable scoped plaintext evidence is not yet established. No artwork upload has
 been requested or performed during this investigation. Release remains 0.11.0.
 
-#### User-observed official-app Bluetooth restriction
+#### Operator-observed official-app Bluetooth restriction
 
-The user reports that the official app does not support its artwork feature while
+The test operator reports that the official app does not support its artwork feature while
 the bank is connected through Bluetooth. The planned official-app upload therefore
 did not occur. The scoped observation recorded zero structural transfer events;
 it was cancelled and the temporary debug.app.xlog.enable property restored to its
@@ -450,10 +448,9 @@ For the current BLE-only product, custom artwork upload is deferred. Existing
 verified screen settings remain in scope. No 0.12.0 artwork release or transfer
 success is claimed; the working 0.11.0 release is retained.
 
-
 ### Clock sync and Bluetooth-only UI revision
 
-Revalidated installed Android 6.17.4.14 base APK against the retained SHA-256.
+Revalidated the official Android 6.17.4.14 application code.
 The normal helper still obtains an authorizing identity/secret and selects
 checkAuthentication for linked devices; the unprovisioned branch selects
 setAuthentication. No new P512 anonymous or physical-presence candidate was
@@ -494,11 +491,10 @@ Validation: final hardware-free suite executed 107 tests, six hardware checks
 skipped, zero failures (101 passed), including native clock constructor bounds,
 negative offset acceptance, sequence refusal, fractional-offset refusal, missing
 fields, malformed resource identities and fresh readback serialization.
-Logs: build/clock-tests-native.log and build/clock-release.log. Universal Release
+ Universal Release
 contains arm64/x86_64 and passes codesign --verify --deep --strict. Screen settings
 were rendered and inspected in light/dark appearances at 560x570. Physical time,
 resource transfer, and account-free hardware success remain unverified.
-
 
 ### Local-only scope revision (supersedes clock/artwork product claims above)
 
@@ -538,19 +534,17 @@ The older wiki login-response method is flagged as outdated. Regional browser
 steps are community-reported, not a new authenticated end-to-end test here.
 No passwords or web login tokens enter Somnoire. Notifications remain deferred.
 
-
-Hardware observation in this round: the user reports the bank displays 11:37 PM,
-matching the Mac. This verifies the observed display time, not which earlier
+Hardware observation in this round: the bank clock matched the host clock. This verifies the observed display time, not which earlier
 operation set it or reliable automatic sync. One opt-in diagnostic attempted to
 establish a saved-bank session for 30 seconds and skipped because no live session
 was established; it sent no clock request. No further attempt was made because
 there was no new transport/readback evidence. Release sync remains disabled.
 
-Final validation: build/local-only-verified.log records 109 tests, seven opt-in
+Final validation recorded 109 tests, seven opt-in
 hardware checks skipped, zero failures (102 passed). Exact native UTC vectors,
 removed-field refusal, missing readback, pane-independent clock ownership,
 transport/cancellation distinctions, disabled-preference migration and numeric
-setup validation pass. build/local-only-clock-hardware.log records the separate
+setup validation pass. Separate validation recorded the
 no-session skip and no clock write. Universal Debug/Release build, codesign
 verification and arm64/x86_64 checks passed. Release entitlements are now only
 App Sandbox and Bluetooth. Screen and bundled setup were rendered in both
@@ -579,8 +573,8 @@ Battery details stay expandable; unit selectors moved to General and duplicate
 Settings action was removed. The only dashboard settings entry is the footer gear.
 
 Native notification feasibility was tested in the actual ad-hoc Release bundle:
-build/notification-feasibility.log records authorization=true and one delivered
-notification; the user also confirmed receiving it. No paid signing, Developer ID,
+Validation recorded authorization=true and one delivered
+notification; the test operator also confirmed receiving it. No paid signing, Developer ID,
 notarization, push entitlement or network service was used. The temporary probe
 entrypoint was removed. Alerts are opt-in, default 20% with 10/15/20/25/30 choices,
 silent, with per-bank/threshold persisted episode latches. Fresh recovery to
@@ -588,11 +582,11 @@ threshold+5 rearms; stale data, duplicate samples and relaunch do not re-alert.
 Permission is requested only on enable and checked before delivery. A test action
 and permission status are included. No monitoring is promised during sleep/quit.
 
-build/basic-final.log: 113 tests, seven hardware checks skipped, zero failures
+Validation: 113 tests, seven hardware checks skipped, zero failures
 (106 passed). Added tests cover basic mode persistence/no live attempt, percentage
 expiry/invalid data/zero, alert hysteresis and latch preference persistence.
 Settings (all sections), basic dashboard and battery details were rendered and
-inspected in light/dark. build/basic-final-release.log records universal Release;
+inspected in light/dark. Validation recorded universal Release;
 codesign verification and arm64/x86_64 checks passed, with only App Sandbox and
 Bluetooth entitlements. Broader onboarding and GitHub Pages remain deferred.
 
@@ -604,7 +598,7 @@ while retaining its assertions when hardware is available. No GATT or device-set
 writes were issued by this attempt. Native notification delivery was independently
 verified as described above. Hardware-free final suite still reports 106 passed.
 
-### Onboarding and identity polish (2026-10-29)
+### Onboarding and identity polish
 
 Added a persisted welcome/setup route for account-free percentage monitoring or
 optional full readings. Bank selection completes basic setup; full setup still
@@ -624,29 +618,28 @@ freshness limit, alert policy and source observation dates are unchanged.
 
 Clock review retained the established four-field constructor, independent signed
 packet vectors, acknowledgement correlation and fresh-report confirmation gate.
-Two bounded diagnostic sessions ran (build/polish-clock-hardware.log and
-build/polish-clock-hardware-2.log). The first could not authenticate while using
+Two bounded diagnostic sessions ran. The first could not authenticate while using
 basic-mode preferences; the second used isolated full-readings preferences and
 reached Bluetooth ready but established no live session within 30 seconds.
-Neither sent a clock request. The user cannot currently observe the bank's clock;
+Neither sent a clock request. The test operator cannot currently observe the bank's clock;
 the earlier matching-time observation therefore cannot establish this revision's
 clock behavior. No further attempts were made. Automatic writes/observers remain
 disabled, including migration of older enabled preferences. Screen settings now
 says to set time in the official EcoFlow app. Binding and resource data were not
 changed.
 
-Validation for this revision: build/polish-final-tests.log executed 118 tests,
+Validation for this revision: the test run executed 118 tests,
 seven opt-in hardware checks skipped, zero failures (111 passed). The suite
 includes setup route/resume gates, coarse-age boundaries, thirteen-click unlock,
 asset loading/template states and rendered setup/About panes, alongside existing
 mode, authentication, readback and clock-vector coverage. Light/dark rendered
 Welcome, full-access setup, About, settings and awake/sleepy template marks were
-inspected. build/polish-release.log records a universal x86_64/arm64 Release build;
+inspected. Validation recorded a universal x86_64/arm64 Release build;
 codesign strict verification passed and entitlements remain sandbox + Bluetooth.
 Dock policy and appearance switching are implemented; interactive window-lifecycle
 acceptance on a running Release instance is not recorded by these render tests.
 
-### Dashboard consolidation and fractional display (2026-10-29)
+### Dashboard consolidation and fractional display
 
 The dashboard now has only Quit and a direct Settings gear as its action buttons.
 Monitoring, selection, Forget, setup and Retry are in General; connection status
@@ -664,31 +657,30 @@ pairs into TIFF representations loaded as original-color NSImages. Removed the
 hand-drawn template marks. AppIcon.icns is named explicitly in CFBundleIconFile.
 The bundle identity and notification authorization mechanism were preserved.
 
-Validation: build/refinement-verified-tests.log executed 120 tests with seven
+Validation: the test run executed 120 tests with seven
 opt-in hardware checks skipped, zero failures (113 passed). Includes fractional
 rounding, whole advertisements, invalid/nonfinite rejection, age/source retention,
 alert conversion independence, and both color image representations. Rendered
-General/About and color icons were inspected. Universal Release succeeded in
-build/refinement-verified-release.log. Automated desktop access timed out twice,
+General/About and color icons were inspected. Universal Release succeeded. Automated desktop access timed out twice,
 so the final Release notification banner icon has not been visually confirmed;
-the user was asked to test it through Alerts. No system-wide icon-cache reset or
+The test operator was asked to test it through Alerts. No system-wide icon-cache reset or
 notification authorization reset was performed. Clock sync remains disabled.
 
 #### Notification icon follow-up
 
-The user confirmed the refinement Release test still displayed a generic banner
-icon. Launch Services inspection found 32 registered Somnoire development copies.
-NSWorkspace.urlForApplication resolved the shared identifier to build/Basic's
+The test operator confirmed the refinement Release test still displayed a generic banner
+icon. Launch Services inspection found multiple registered development copies.
+NSWorkspace.urlForApplication resolved the shared identifier to an older
 iconless Debug bundle; the running app was a different Xcode DerivedData Debug
 copy. This establishes an application-resolution conflict, but does not prove
 that it is the only cause of the Notification Center placeholder.
 
 Incremented CFBundleVersion from 20 to 21, built universal Debug/Release, and
 refreshed only the current Release registration with the public LSRegisterURL API.
-The system now resolves the identifier to the current build/Polish Debug bundle
+The system now resolves the identifier to the current Debug bundle
 (build 21, which includes the icon). NSWorkspace's resolved file-icon lookup was
 rendered and inspected: it returns the supplied Somnoire artwork. Both builds
-succeeded (build/notification-icon-debug.log, build/notification-icon-release.log)
+succeeded
 and strict Release signature verification passed. No permission resets, bundle-ID
 changes, global cache resets or old build deletion occurred. A fresh build-21
 notification banner remains pending user verification; this is not yet a confirmed
@@ -696,7 +688,7 @@ notification-icon fix.
 
 #### Compiled icon catalog candidate (build 22)
 
-The user confirmed build 21 still showed the generic notification icon, despite
+The test operator confirmed build 21 still showed the generic notification icon, despite
 correcting application lookup. The registration conflict was therefore not a
 sufficient explanation or fix. Build 22 replaces the manually copied ICNS resource
 with Xcode's standard macOS app-icon asset catalog, compiled from the supplied
@@ -704,19 +696,19 @@ source at all standard/Retina icon sizes. actool now generates Assets.car,
 AppIcon.icns, CFBundleIconName=AppIcon and CFBundleIconFile=AppIcon. The identifier,
 permission flow and notification content are unchanged.
 
-build/icon-catalog-release.log records a successful universal Release build;
-strict signature verification passed. build/icon-catalog-tests.log executed 120
+Validation recorded a successful universal Release build;
+strict signature verification passed. The test run executed 120
 tests, seven opt-in hardware checks skipped, zero failures (113 passed), including
 new integration assertions for generated icon metadata and resources. Desktop UI
 access succeeded for the build-21 Settings window, allowing a normal Quit; build
 22 was then launched. NSRunningApplication confirms the running bundle is
-build/IconCatalog/Build/Products/Release/Somnoire.app. UI automation cannot obtain
-its menu-only state, so the user was asked to send a fresh test from build 22.
+the tested application bundle. UI automation cannot obtain
+its menu-only state, so the test operator was asked to send a fresh test from build 22.
 Notification-banner appearance remains unconfirmed, rather than claimed fixed.
 
 #### Build 22 live result
 
-The user confirmed build 22 also displays the generic notification icon.
+The test operator confirmed build 22 also displays the generic notification icon.
 Consequently neither registration repair nor the compiled app-icon catalog is a
 verified banner fix. Somnoire-specific usernoted/NotificationCenter logs show the
 fresh test notification accepted and presented as a banner/list without sound;
@@ -734,75 +726,45 @@ working local alerts and standard compiled icon packaging; document the generic
 banner icon as a cosmetic limitation. No notification database edits, permission
 resets, private API icon overrides or system-wide cache changes were attempted.
 
-### Kusanalee stable-identity upgrade (builds 23–24)
+### Stable application identity and signing
 
-The personal installation now uses io.github.kusanalee.Somnoire, organization
-kusanalee, and io.github.kusanalee.Somnoire.bank-credential. A persistent local
-code-signing certificate in the login Keychain signs Debug and Release. Its
-private key is not in the repository; temporary generation/export files were
-removed. Code-signing trust was configured in the user domain only, not system
-trust stores. No paid account, notarization, fabricated Team ID or weakened
-identifier-only designated requirement was used.
+A persistent local code-signing identity was used for Debug and Release. Private
+key material is not included in the repository. The application namespace and
+Keychain service were migrated while preserving legacy access for rollback.
+Container protection was respected; guided setup remained the fallback when
+preference import was unavailable.
 
-Installed at ~/Applications/Somnoire.app, preserving prior installations and
-legacy data for rollback. Direct preference import encountered macOS container
-protection. The original preferences were privately backed up; no protection was
-bypassed, and guided setup was used. Basic monitoring selected the nearby bank;
-full mode subsequently used normal Keychain authorization to copy the legacy
-credential into the new service. The user handled the Keychain prompt and
-confirmed live data, and Settings showed Connected to your EcoFlow. Legacy
-credentials were retained. No credential bytes were exported or logged.
+Hardware acceptance confirmed live telemetry, remembered access across relaunch,
+Bluetooth permission retention across a changed build, and notification artwork.
+These results apply to the tested installation and signing identity; they do
+not establish the cause of the icon fix or guarantee behavior on other systems.
 
-The user confirmed no Bluetooth prompts on two unchanged-build relaunches and
-again after replacing build 23 with build 24 at the same path. Binary SHA-256
-changed; codesign reports the identical certificate-root + bundle-identifier
-designated requirement. Fresh advertisement monitoring was independently visible
-in Settings. The user also confirmed the supplied artwork in the new identity's
-notification banner. This verifies this Mac and this signing identity; it does
-not isolate whether the namespace/cache change or signer change fixed artwork,
-and does not establish behavior on other Macs.
-
-build/kusanalee-verified-tests.log executed 121 tests, seven hardware checks
-skipped, zero failures (114 passed). Synthetic native Keychain seams exercise
-new-first lookup, successful legacy migration, denied/locked access, malformed
-credentials, failed-save preservation, and both-namespace Forget. Two additional
-Python preference migration tests passed. Final universal Release is recorded in
-build/kusanalee-verified-release.log; signature verification with login-Keychain
-access passes. Entitlements remain sandbox + Bluetooth. The local build helper
-fails when its signing identity is missing rather than silently using ad-hoc.
-Relaunching the app from Finder now opens Settings if no windows exist. The old
-startup registration was not changed automatically; Launch at Login is off in
-the new installation and can be re-enabled after checking the old app's entry.
-Clock sync remains disabled.
-A further quit/relaunch after migration returned to Connected to your EcoFlow
-without re-entering the account ID, confirming remembered access in the new
-namespace. Direct preference migration remains a guided fallback, not a claimed
-successful container import.
-The accessible sfltool startup-registration output contained no Somnoire entry;
-the new installation's Launch at Login checkbox was off. No startup item was
-registered or removed during this upgrade.
+Validation recorded 121 tests, seven hardware checks skipped, zero failures
+(114 passed), plus two passing Python migration tests. Tests cover Keychain
+lookup, legacy migration, denied or locked access, malformed credentials,
+failed-save preservation, and removal from both credential services. Universal
+Release signing and sandbox/Bluetooth entitlements were checked. No startup
+registration was changed automatically. Clock sync remained disabled.
 
 ### 1.0.0 release validation
 
 Version 1.0.0, build 25 packages the previously verified app behavior under the
-persistent Kusanalee signing identity. build/release-1.0.0-tests.log records 121
+persistent local signing identity. Validation recorded 121
 executed tests, seven opt-in hardware checks skipped, zero failures (114 passed).
 Two Python preference-migration checks also pass. Universal Debug and Release
-architectures are arm64/x86_64. build/release-1.0.0-build.log records the Release
+architectures are arm64/x86_64. Validation recorded the Release
 build. The universal ZIP was extracted and verified with codesign --deep --strict;
 version, build, identifier, compiled icon metadata and sandbox/Bluetooth-only
 entitlements were checked. No private key material is included. The app remains
 locally certificate-signed, without Developer ID or Apple notarization.
-ZIP SHA-256: 9fe104fb69fea0932178d92baf9ae2efc9b46d965d2a27233587629c0c3f5b6c.
 Live Bluetooth/notification/Keychain observations remain those of builds 23–24;
 no new device writes or hardware claims were introduced by this release step.
-
 
 <a id="ble-research"></a>
 
 ## Initial BLE research
 
-Reviewed 26 October 2026. These are observations about other software and products,
+These are observations about other software and products,
 not a verified specification for the EcoFlow RAPID Pro 27,650mAh (300W).
 This note records the Phase 0 research boundary. Phase 1A now implements only the
 two captured session requests; see [the Phase 1A report](#phase-1a). Account
@@ -888,7 +850,6 @@ The current bounded session/status experiment and table provenance are documente
 in [Phase 1B](#phase-1b); historical nonimplementation statements above describe
 their original phase. No login or telemetry implementation has been added.
 
-
 <a id="phase-0-validation"></a>
 
 ## Phase 0 validation
@@ -896,11 +857,9 @@ their original phase. No login or telemetry implementation has been added.
 For current key-exchange and hardware results, see [Phase 1A](#phase-1a).
 This record describes the earlier Phase 0 build and its validation limits.
 
-Validation date: 26 October 2026.
-
 ### Passed
 
-- Native macOS Debug and Release builds with Xcode 27.0 (27A266a), Swift 6.4.
+- Native macOS Debug and Release builds with Xcode and Swift.
 - Both `arm64` and `x86_64` slices present in Debug and Release application binaries,
   verified using `lipo -archs`. Deployment target is macOS 13.0.
 - 18 XCTest cases executed on the local Apple silicon Mac: **0 failures**.
@@ -910,7 +869,7 @@ Validation date: 26 October 2026.
   cancellation/late events, log bounds, payload preview truncation, and export privacy.
 - The manager starts idle and rejects unseen-device connections without creating
   a Bluetooth central. Tests do not scan, connect, pair, or request Bluetooth access.
-- Release application copied to `build/Somnoire.app` and ad-hoc signed with only
+- Release application packaged in the build output and ad-hoc signed with only
   `com.apple.security.app-sandbox` and `com.apple.security.device.bluetooth`.
 - `codesign --verify --deep --strict` passes for the runnable Release bundle.
 - Built Info.plist inspected: macOS-only platform, deployment target 13.0,
@@ -928,24 +887,10 @@ Xcode temporarily adds test-runner sandbox exceptions and embeds the test bundle
 in its Debug test host. **The separately signed Release app contains neither the
 test bundle nor those exceptions.** Use that Release app for ordinary inspection.
 
-### Artifacts
+### Build artifacts
 
-Generated artifacts are ignored by Git:
-
-- Runnable, signed application: `build/Somnoire.app`.
-- Successful XCTest result bundle: `build/LayoutFinal.xcresult`.
-- Debug compilation check: `build/DerivedData/Build/Products/Debug/Somnoire.app`.
-- Release compilation check: `build/ReleaseCheck/Build/Products/Release/Somnoire.app`.
-
-To reproduce the runnable application after the unsigned Release build:
-
-```sh
-ditto build/ReleaseCheck/Build/Products/Release/Somnoire.app build/Somnoire.app
-codesign --force --sign - --entitlements Somnoire.entitlements \
-  --timestamp=none build/Somnoire.app
-codesign --verify --deep --strict build/Somnoire.app
-open build/Somnoire.app
-```
+Build outputs and private validation logs are excluded from the repository.
+See [building](building.md) for current build, signing, and test instructions.
 
 ### Not verified
 
@@ -971,10 +916,9 @@ intrinsic-size measurement collapsed that scroll area, hiding Scan and all body
 controls. The panel now gives the scroll area an explicit 480-point height.
 A native NSHostingView regression test checks the panel's measured width and
 usable height. Bluetooth permission is still requested on Scan, not at launch.
-The universal Release app at `build/Somnoire.app` was rebuilt and signed after
+The universal Release app in the build output was rebuilt and signed after
 this correction. The live menu-bar panel and Bluetooth permission flow still
 require interactive validation; native sizing tests do not establish those flows.
-
 
 <a id="phase-1a"></a>
 
@@ -987,8 +931,8 @@ Ordinary **Connect** remains a GATT-only inspection operation.
 
 ### Verified behavior
 
-On 26 October 2026, the opt-in native hardware test completed
-**two consecutive probes** on the user's RAPID Pro. Each generated fresh keys,
+the opt-in native hardware test completed
+**two consecutive probes** on the test power bank. Each generated fresh keys,
 validated the peer point, decrypted the 32-byte key-info ciphertext with valid
 PKCS#7 padding and an 18-byte plaintext result, discarded it, and intentionally
 disconnected. The selected test passed in 5.568 seconds total, including scanning
@@ -1082,14 +1026,13 @@ app before running it.
 
 Local results:
 
-- Unit tests: `build/Phase1Tests-Final.xcresult` — 31 passed, hardware test skipped.
-- Hardware: `build/Phase1Hardware.xcresult` — both probe attempts passed.
+- Unit tests: 31 passed, hardware test skipped.
+- Hardware: both probe attempts passed.
 - Debug and Release compile for arm64 and x86_64 with deployment target macOS 13.
 
 Intel runtime, macOS 13 runtime, and the new button's live menu-panel appearance
 have not been directly checked. Native sizing tests pass. The next protocol phase
 must investigate final session-key derivation and authentication independently.
-
 
 <a id="phase-1b"></a>
 
@@ -1102,7 +1045,7 @@ standard manual subscriptions only; it sends no proprietary values.
 
 ### Evidence and limits
 
-The user's 0.2.0 diagnostic export records successful probes lasting 724 ms and
+The 0.2.0 diagnostic export records successful probes lasting 724 ms and
 785 ms, each followed by a local disconnect request. Between them an ordinary
 GATT-only connection lasted approximately 8.2 seconds before CBErrorDomain/7.
 That code reports peripheral disconnection; it does not establish a firmware
@@ -1176,11 +1119,11 @@ control, heartbeat, retry, or reconnect is implemented.
 
 ### Validation
 
-On 26 October 2026, both explicitly requested native hardware attempts passed on
+both explicitly requested native hardware attempts passed on
 the nearby eligible RAPID Pro. They received strictly validated matching encrypted
 status replies in **0.851 s** and **0.792 s** from connection establishment, then
 intentionally disconnected. The selected XCTest passed in 11.024 s total including
-scanning and teardown, with zero failures/skips (`build/Phase1BHardware.xcresult`).
+scanning and teardown, with zero failures/skips.
 This verifies the candidate query and final session derivation on this device.
 It does not verify login, status-payload semantics, persistent access, or an
 account-identifier requirement.
@@ -1197,8 +1140,7 @@ unrelated replies, fragmented/coalesced frames, early replies, rejected writes,
 cancellation/deadline cleanup, diagnostics, and the existing native panel-size test.
 No captures or device secrets are test fixtures.
 
-- Final default suite: **36 passed**, one opt-in hardware test skipped, zero failures
-  (`build/Phase1BTests-Final.xcresult`).
+- Final default suite: **36 passed**, one opt-in hardware test skipped, zero failures.
 - Debug and Release compile for **arm64 and x86_64**, deployment target **macOS 13**.
 - Release excludes DEBUG crypto hooks and OpenSSL linkage; its protocol resource
   and notices are checked against source. Release signing disables Xcode's injected
@@ -1207,9 +1149,8 @@ No captures or device secrets are test fixtures.
   choices, Intel runtime, and macOS 13 runtime remain unperformed; compilation and
   hosting-view tests do not establish those checks.
 
-The local runnable artifact is `build/Somnoire.app` (0.3.0). Ordinary test execution
-does not enable hardware probing. Raw Android captures remain ignored under build/.
-
+The local runnable artifact is the built application (0.3.0). Ordinary test execution
+does not enable hardware probing. Raw Android captures remain ignored outside version control.
 
 <a id="phase-2a"></a>
 
@@ -1268,9 +1209,8 @@ its results remain under ignored build/ and are separate from clipboard exports.
 
 ### Future encrypted telemetry evidence
 
-Read-only inspection of the installed Android app **6.17.4.14**, version code
-11113, found `assets/bundle/PowerBank.bundle` (2,884,318 bytes), SHA-256
-`ef8c0d64dc82ab52b7564137b6a40dcf998bbf12d784ad0045256a5d088249fe`.
+Read-only inspection of official Android app **6.17.4.14**, version code
+11113, found `assets/bundle/PowerBank.bundle`.
 Its shared power-bank decoder describes integer `soc` at payload offset 11 and
 little-endian Float32 `socF` at offset 12; its UI data handler accepts command set
 `0x0C`, ID `0x01`. The bundle maps the broader P51 serial family to PB501. This
@@ -1297,16 +1237,16 @@ Intel
 and macOS 13 runtime checks remain separate from cross-compilation; native panel
 sizing tests do not replace direct inspection of the new battery row.
 
-#### Physical comparisons — 26 October 2026
+#### Physical comparisons
 
 - Full charge: the earlier local manufacturer payload contained `0x64` at index 19
-  and the user confirmed **100%** on the physical display.
-- Lower charge: the passive native hardware sample read **96**. The user then
+  and the test operator confirmed **100%** on the physical display.
+- Lower charge: the passive native hardware sample read **96**. The test operator then
   confirmed **96% now** on the physical display. The preceding 99% report was older;
   it was not used as a mismatched simultaneous comparison or silently treated as
   a passing result.
 - The passive test passed in 0.111 seconds with no connection/probe/subscription
-  events (`build/Phase2ABatterySample-R3.xcresult`). Two earlier scans returned zero
+  events. Two earlier scans returned zero
   peripherals while an older Xcode-run Somnoire instance was present; discovery
   resumed after that instance was closed. Those unsuccessful scans are retained
   as environmental observations, not protocol-validation passes.
@@ -1319,10 +1259,10 @@ unsupported status-bit combinations continue to produce Battery unavailable.
 #### Build and regression results
 
 - Final default suite: **42 hardware-free tests passed**, two opt-in hardware tests
-  skipped, zero failures (`build/Phase2ATests-Final.xcresult`). This includes native
+  skipped, zero failures. This includes native
   panel sizing and both prior probe modes' synthetic regressions.
 - Debug and Release compile for **arm64 and x86_64**, deployment target macOS 13.
-- The Release bundle at `build/Somnoire.app` is version **0.4.0**, locally ad-hoc
+- The Release bundle in the build output is version **0.4.0**, locally ad-hoc
   signed and verified. Entitlements remain only App Sandbox and Bluetooth access;
   `LSUIElement` remains true. Dependency resources/notices match source; no DEBUG
   crypto test hooks or OpenSSL libraries enter Release.
@@ -1332,7 +1272,6 @@ unsupported status-bit combinations continue to produce Battery unavailable.
 One older Somnoire instance was closed for hardware sampling. Run a single instance
 and use **Scan** to obtain a new battery snapshot; simply opening the panel does
 not scan or reconnect.
-
 
 <a id="phase-2b"></a>
 
@@ -1405,13 +1344,12 @@ packets, keys and unsanitized errors. The 1,000-event in-memory limit remains.
 
 ### Native design basis
 
-Reviewed Apple's current HIG on 26 October 2026:
+Apple HIG references:
 
 - [The menu bar](https://developer.apple.com/design/human-interface-guidelines/the-menu-bar)
   — native menu for simple extras, template symbols and familiar behavior.
 - [Menus](https://developer.apple.com/design/human-interface-guidelines/menus)
   — important actions first, concise labels, logical groups and sparing icons;
-  the page records an icon-guidance update on 8 June 2026.
 - [Materials](https://developer.apple.com/design/human-interface-guidelines/materials)
   — system components adopt platform appearance; no custom glass layers are added.
 - [Duplicate advertisement option](https://developer.apple.com/documentation/corebluetooth/cbcentralmanagerscanoptionallowduplicateskey)
@@ -1423,25 +1361,24 @@ The utility is a technical-tools window, not the future standalone monitoring UI
 ### Validation
 
 The final default suite passed **51 hardware-free tests**, with four opt-in
-hardware tests skipped (`build/Phase2BTests-Delivery.xcresult`). Tests cover association,
+hardware tests skipped. Tests cover association,
 ambiguity, remembered-target behavior, expiry, invalidation, pause/Bluetooth/sleep
 presentation, candidate bounds, burst coalescing, diagnostic deduplication,
 preferences, test-host restoration, window lifecycle and light/dark intrinsic size.
 Existing Phase 0, advertisement decoding and cryptographic tests remain.
 
-The **Somnoire Continuous Monitoring Check** hardware test passed in **45.296 s**
-(`build/Phase2BHardware.xcresult`). It accepted **38 advertisements**, retained a
+The **Somnoire Continuous Monitoring Check** hardware test passed in **45.296 s**. It accepted **38 advertisements**, retained a
 fresh reading after more than 30 seconds with no menu open, and refreshed after
 pause/resume. It observed no GATT connection, subscription or probe activity.
 
 The separate **Somnoire Diagnostic Lifecycle Check** makes one explicitly requested
 read-only GATT connection to test suspension, close/teardown, retained stale services
 and monitoring resumption. It sends no proprietary packets or subscriptions.
-It passed in **7.929 s** (`build/Phase2BDiagnosticHardware.xcresult`), confirming
+It passed in **7.929 s**, confirming
 monitoring resumed after closure and the nonempty GATT snapshot remained stale.
 
 Debug and Release compile for **arm64 and x86_64** with deployment target macOS 13.
-The packaged **0.5.0** Release at `build/Somnoire.app` is locally ad-hoc signed and
+The packaged **0.5.0** Release in the build output is locally ad-hoc signed and
 verified, with only App Sandbox/Bluetooth entitlements. Its protocol resource and
 third-party notices match source; DEBUG crypto hooks and OpenSSL linkage are absent.
 An explicit duplicate launch left the original Release process as the sole instance.
@@ -1456,7 +1393,6 @@ Actual system sleep/wake, physically removing/returning the bank, permission cha
 Intel runtime and macOS 13 runtime remain manual checks. A changing percentage during
 continuous operation is not claimed solely from repeated receipt of an unchanged
 value; Phase 2A independently validated the mapping at 100% and 96%.
-
 
 <a id="phase-2c"></a>
 
@@ -1496,7 +1432,7 @@ and access requirements must be verified before adding production power rows.
 
 ### Retained capture and reference findings
 
-The ignored `build/rapid-pro-full.cfa` is a BTSnoop H4 capture. A local metadata-only
+The private capture is in BTSnoop H4 format. A local metadata-only
 inspection found 507 CRC-valid outer envelopes over an approximately 158-second
 ACL capture span: **503 encrypted envelopes and four unencrypted exchange envelopes**. The encrypted
 packet bodies cannot be interpreted from that capture alone: the phone's ephemeral
@@ -1529,20 +1465,19 @@ Failure before that window fails the hardware check.
 
 ### Validation and remaining gate
 
-On 27 October 2026, four fresh sessions reached the observation
-window on the nearby bank. Two attempts were repeated while the user confirmed
+four fresh sessions reached the observation
+window on the nearby bank. Two attempts were repeated while the test operator confirmed
 that the bank was actively charging a device. All four returned a strictly validated
 V3 status reply with a two-byte payload and header `35/01 → 21/01`, command
 `35/89`. **None returned another validated packet.** Two windows completed; two
 ended with a peripheral disconnect during observation. All released the connection.
 
 The two opt-in hardware test runs passed **as bounded experiments**:
-`build/Phase2CTelemetryHardware-R4.xcresult` and
-`build/Phase2CTelemetryHardware-Loaded.xcresult`. These are not port-power acceptance
+These are not port-power acceptance
 tests. Earlier discovery attempts received no advertisements; discovery recovered
 after closing the regular Somnoire instance. Run one instance at a time.
 
-The final default suite (`build/Phase2CUnitTests-Final.xcresult`) passed
+The final default suite passed
 **53 hardware-free tests**, with five hardware checks skipped and zero failures. It includes observation timing, fragmentation, header
 deduplication, write/reply ordering, cancellation, disconnect/invalid-packet cleanup,
 and generic metadata validation against independent synthetic encrypted vectors.
@@ -1574,7 +1509,6 @@ The original Swift decoder is tested on synthetic payloads. This resolves the
 payload-schema research prerequisite at app-source confidence; the BLE request,
 access behavior and hardware comparison gate remain open.
 
-
 <a id="phase-2d"></a>
 
 ## Phase 2D: account-free access experiment
@@ -1586,7 +1520,7 @@ validated authentication-status summary, then requests one display report using 
 fixed app-derived payload. It does not log in, provision credentials, change
 ownership, unbind, reset, change report periods, or alter charging/port settings.
 
-On 27 October 2026, two independent fresh sessions on the user's
+two independent fresh sessions on the
 loaded P512 returned **app would check an existing credential · normal mode**.
 Both sent the one-shot report request and received its GATT write acknowledgement.
 Neither received a matching application reply or a display upload. The bank
@@ -1594,7 +1528,7 @@ initiated disconnection after approximately **9.70 s** and **9.48 s** from conne
 The test verified that battery scanning resumed after each attempt.
 
 The dedicated hardware test passed **as an experiment**, not as account-free
-telemetry acceptance (`build/Phase2DHardware-R2.xcresult`). Both attempts decoded
+telemetry acceptance. Both attempts decoded
 zero telemetry packets and zero port-power updates. No physical port comparison
 was therefore possible. Two independent decoded streams plus a confirmed load
 change remain required before claiming a working path.
@@ -1607,8 +1541,8 @@ for a never-linked bank.
 
 ### Source trace and operation classification
 
-Evidence comes from static inspection of the user's installed EcoFlow app
-6.17.4.14/11113. APK/bundle hashes and the P512-to-PB501 mapping are recorded in
+Evidence comes from static inspection of the official EcoFlow app
+6.17.4.14/11113. The static source and P512-to-PB501 mapping are recorded in
 [P512 Protocol](#p512-protocol). No app storage, account values or logs were read.
 
 | Operation | Wire form / evidence | Classification and implementation |
@@ -1721,14 +1655,13 @@ no device/account material. Current-bank APIs cannot construct credential, unbin
 reset or arbitrary settings writes.
 
 **Final hardware-free suite:** 67 passed, six opt-in hardware checks skipped, zero
-failures (`build/Phase2DTests-Final.xcresult`). Debug and Release compile for
+failures. Debug and Release compile for
 arm64 and x86_64; both universal binaries and the Release signature were verified.
 Release retains App Sandbox/Bluetooth-only entitlements. Intel/macOS 13 runtime
 and live UI appearance remain unverified; native sizing tests are not visual QA.
 The next supported step requires either another evidence-backed anonymous read
 path or dedicated never-linked hardware to validate a fully local onboarding flow.
 The existing bank's credentials will remain unchanged.
-
 
 <a id="phase-2e"></a>
 
@@ -1740,8 +1673,7 @@ This explicit experiment checks the current bank's existing credential. It canno
 set a credential, replace pairing, unbind, reset, change charging settings, or
 configure reporting periods. Normal monitoring remains advertisement-only.
 
-The retained official Android app 6.17.4.14/11113 is the static source (package
-and bundle hashes are in [P512 Protocol](#p512-protocol)). In `classes9.dex`:
+The retained official Android app 6.17.4.14/11113 is the static source (source details are in [P512 Protocol](#p512-protocol)). In `classes9.dex`:
 
 - `EFBleAuthNoDialogHelper.bleAuthNormal` uses the authorizing person's ID plus
   the destination serial for the normal V3 path. `com.blankj.utilcode.util.c0.V`
@@ -1816,9 +1748,8 @@ provisioning replies, malformed framing, padding and checksums. State-machine te
 cover early replies, fragmentation, write acknowledgements, pre-authentication
 telemetry, status-only outcomes, deadlines, cancellation and cleanup.
 
-On 27 October 2026, the 0.5.4 hardware-free run passed **77 tests**,
-with six unrelated opt-in hardware checks skipped and no failures
-(`build/Phase2EV19Tests-R1.xcresult`). Debug and Release compile for arm64 and
+the 0.5.4 hardware-free run passed **77 tests**,
+with six unrelated opt-in hardware checks skipped and no failures. Debug and Release compile for arm64 and
 x86_64. The universal Release signature validates; entitlements remain App Sandbox
 and Bluetooth only. Intel/macOS 13 runtime and native visual QA remain unverified.
 
@@ -1827,18 +1758,16 @@ user opened Diagnostics. An official-site profile response supplied a numeric ID
 without saving it or printing it in research logs. The first manual attempt could
 not start because the authenticated menu item was disabled. The revised UI gives
 explicit readiness feedback and delegates validation to the manager before any
-connection. A subsequent user-supplied report contained an ordinary GATT inspection
+connection. A subsequent operator-supplied report contained an ordinary GATT inspection
 and peer disconnect, without probe stages or authentication writes. That run is
 not an authentication failure. To make the next action unambiguous, authentication
 now has a dedicated row button and an immediate typed **Probe requested** event.
-The initial browser clipboard did not populate the native field with a valid ID.
-A temporary local-only field on the already signed-in official page allowed native
-manual copy/paste. The 19-digit ID was serialized as a string and retained exactly;
-neither that ID nor a generated token was printed or saved in research artifacts.
+Account identifiers were handled as strings to preserve exact input; no identifier
+or generated token was printed or saved in research artifacts.
 
-### User-assisted current-bank authentication result
+### Operator-assisted current-bank authentication result
 
-A subsequent user-supplied diagnostic report establishes a successful existing-
+A subsequent operator-supplied diagnostic report establishes a successful existing-
 credential check on the current bank. The sequence reached normal check-credential
 status, then received a validated `35/01→21/01`, `35/86`, sequence-2 reply with a
 one-byte success payload. Both write/reply barriers completed. The report records
@@ -1857,7 +1786,7 @@ unsupported version (including a distinct V19 category), exact length, and CRC16
 No failed packet body or raw version byte is exported. Native parser selection
 is corroborated by `EcoProtocolParseHelper` and `EcoProtocolParseTypeSession`,
 which delegates to the installed app's `TreatyEngine.aesDecryptFrame`.
-The next user-assisted attempt again accepted the credential, then identified
+The next operator-assisted attempt again accepted the credential, then identified
 **V19 (`0x13`)** after successful AES/PKCS#7 and header CRC8 validation. It ended
 after approximately 1.19 seconds with no decoded telemetry; passive scanning
 resumed. This supplies the actual-bank evidence for extending the access parser.
@@ -1874,10 +1803,8 @@ The 0.5.4 reference-based candidate failed on the current bank with an exact
 V19-length error after another accepted credential check. No telemetry was decoded.
 Its assumption that the declared length included the sentinel was incorrect.
 
-With the user's authorization, ADB retrieved only the installed app's ARM64 code
-split, not account storage. `libnative-lib.so` SHA-256:
-`90c3c13aaf47a5975ea23667b113b7bee5bd396ce92ab0ba222f4925fdaa30c1`.
-The retained disassembly establishes:
+Static inspection of the official app's ARM64 native library,
+`libnative-lib.so`, establishes:
 
 - `unpack_data` dispatches both version 3 and 19 to `getV3Data`.
 - `getV3Data` at `0x99470` requires `20 + declared payload length`; body bytes
@@ -1912,18 +1839,18 @@ each physical port/cable must then be compared before assigning user-facing labe
 
 ### 0.5.5 verification
 
-`Phase2EV19Native-R1.xcresult`: 84 tests executed, six opt-in hardware checks
+Validation: 84 tests executed, six opt-in hardware checks
 skipped, zero failures (78 hardware-free passed). This includes typed failure
 cleanup and the native-derived synthetic V19 cases. Universal Debug/Release build
-logs are `build/TelemetryResearch/v19-native-{debug,release}-r1.log`; both passed
+checks both passed
 for arm64 and x86_64. Release signature verification passed and entitlements
 remain App Sandbox plus Bluetooth only.
-A new user-assisted bank run is still required; no live V19 decode or port mapping
+A new operator-assisted bank run is still required; no live V19 decode or port mapping
 is claimed from these tests.
 
 ### Current-bank V19 streaming result (0.5.5)
 
-The user's next report validates V3 status and credential replies, then V19
+The next report validates V3 status and credential replies, then V19
 `FE/12` (seven-byte body) and repeated `FE/15` uploads (166, 29 and 15-byte bodies).
 Uploads arrive about once per second, including multiple frames per notification
 and frames across notification boundaries. The observed upload route is
@@ -1943,15 +1870,15 @@ V3 exclusion, the reverse mixed route, and FE/12 remaining unrelated.
 The next hardware gate is actual protobuf decoding and a complete bounded session,
 then a second fresh session with load changes and physical port comparisons.
 
-0.5.6 hardware-free validation: `build/Phase2EV19Route-R1.xcresult`, 84 tests
+0.5.6 hardware-free validation: 84 tests
 executed, six opt-in hardware checks skipped, zero failures (78 passed).
 Universal Debug and Release builds passed for arm64/x86_64; the Release signature
-verified. Logs: `build/TelemetryResearch/v19-route-{debug,release}-r1.log`.
-The tested 0.5.6 Release build was launched for the next user-assisted check.
+verified.
+The tested 0.5.6 Release build was launched for the next operator-assisted check.
 
 ### First complete authenticated telemetry session (0.5.6)
 
-The user's complete report confirms a fresh credential check followed by
+The complete report confirms a fresh credential check followed by
 **87 decoded telemetry bodies and 29 port-power updates**. The probe completed
 normally after 31.431 seconds, with 95 observed packets counted, requested
 disconnection, received disconnection, and resumed passive scanning. GATT snapshots
@@ -1967,7 +1894,7 @@ with controlled loaded/unloaded comparisons using the current build.
 
 ### Repeated loaded and unloaded sessions (0.5.6)
 
-The user supplied two further completed results:
+The test operator supplied two further completed results:
 
 | Condition | Credential | Decoded bodies | Port-power updates | Duration | Cleanup |
 | --- | --- | ---: | ---: | ---: | --- |
@@ -1977,7 +1904,7 @@ The user supplied two further completed results:
 The loaded result displayed field 852 at **−22.9 W, 15.3 V, 1.5 A**; other
 allowlisted port fields had no measurements. The unloaded result showed missing
 W/V/A for all port fields. No identity, serial, token or raw payload was supplied
-or retained in these observations. The user identified the loaded physical port as **C1, labelled “140W in/out.”**
+or retained in these observations. The test operator identified the loaded physical port as **C1, labelled “140W in/out.”**
 This maps field 852 to C1 in the tested output condition. Bank-screen wattage
 comparison and input-direction validation remain pending. The reported loaded values are consistent in
 magnitude with V × A (22.95 W using rounded display values), but that arithmetic
@@ -2005,22 +1932,21 @@ credentials, routing, deadlines and passive monitoring are unchanged.
 The built-in cable has not yet been physically mapped. The app-derived port
 names are not substituted for missing hardware evidence.
 
-0.5.7 validation: `build/Phase2EOutcome-R1.xcresult`, 85 tests executed with six
+0.5.7 validation: 85 tests executed with six
 opt-in hardware checks skipped and zero failures (79 hardware-free passed).
 The new state-machine test distinguishes a decoded body with no embedded port
 measurement from silence, and verifies absence is preserved through cleanup.
 Universal Debug/Release builds passed for arm64 and x86_64, Release signature
-verification passed, and 0.5.7 was launched. Logs:
-`build/TelemetryResearch/outcome-{debug,release}-r1.log`.
+verification passed, and 0.5.7 was launched.
 
 ### Resume checkpoint
 
-Work stopped at the user's request after publishing the current implementation.
+Work stopped at the request after publishing the current implementation.
 The tested local app is 0.5.7. Authentication and repeated decoded telemetry are
 verified; field 852 maps to physical C1 (140W in/out) in an output test. All other
 physical mappings remain experimental.
 
-Next user-assisted checks:
+Next operator-assisted checks:
 
 1. Compare C1's reported output watts with the bank's own display.
 2. Load each remaining accessible port and the built-in cable individually using
@@ -2033,11 +1959,11 @@ Next user-assisted checks:
 
 No account ID or derived credential is retained in the repository. Identity entry
 is still volatile and must be supplied again for a new check. Private code-only
-research inputs and build/test artifacts remain ignored under `build/`.
+research inputs and private build artifacts remain ignored under `build/`.
 
 ### C2 payload rejection and diagnostic build (0.5.8)
 
-On 28 October 2026, the user tested C2, labelled “140W in/out,”
+The test operator tested C2, labelled “140W in/out,”
 charging one device with no other ports connected. Existing-credential acceptance
 succeeded. A 166-byte V19 FE/15 upload on the established route passed frame
 validation but failed protobuf/measurement validation. The probe ended after
@@ -2060,16 +1986,16 @@ bounded probe to finish and share Copy Diagnostics. Determine the precise reject
 before changing acceptance rules or resuming port mapping. No live 0.5.8 result
 is claimed by synthetic verification.
 
-0.5.8 verification: `build/Phase2EC2Diagnostics-R2.xcresult` passed 87 tests
+0.5.8 verification: the test run passed 87 tests
 with six opt-in hardware checks skipped and zero failures (81 hardware-free
 passed). Synthetic tests cover structural categories and C2 nested fields,
 absolute offsets, no partial measurement/counter commit, secret cleanup and typed
 export. The initial sandboxed run could not execute SwiftUI compiler plugins;
 the subsequent Xcode run passed. Universal Debug and Release builds both contain
 arm64 and x86_64. Release signature verification passed, with only App Sandbox
-and Bluetooth entitlements. Logs: `build/TelemetryResearch/c2-{tests-r2,debug-r1,release-r1}.log`.
+and Bluetooth entitlements.
 Actual-bank 0.5.8 decoding, disconnection and passive scan restoration remain
-the next user-assisted hardware check; native visual QA was not performed.
+the next operator-assisted hardware check; native visual QA was not performed.
 
 ### Battery field isolated from port decoding (0.5.9)
 
@@ -2094,25 +2020,24 @@ record protocol fields and W/V/A separately from Copy Diagnostics, and confirm
 normal bounded completion, disconnect and passive scan restoration. A passing
 synthetic test does not establish actual-bank C2 measurements or physical mapping.
 
-0.5.9 verification: `build/Phase2EBatteryIsolation-R1.xcresult` passed 89 tests,
+0.5.9 verification: the test run passed 89 tests,
 with six opt-in hardware checks skipped and zero failures (83 hardware-free
 passed). Added synthetic coverage includes C2 power with invalid SOC, inclusive
 0/100, repeated SOC fields, old-value invalidation and recovery, malformed port
 rejection, write-acknowledgement barriers, bounded completion and private export.
 Universal Debug/Release builds passed for arm64/x86_64. Release signature verified;
-entitlements remain App Sandbox and Bluetooth only. Logs are under
-`build/TelemetryResearch/battery-isolation-{tests,debug,release}-r1.log`.
-The verified Release was launched for user-assisted hardware validation.
+entitlements remain App Sandbox and Bluetooth only.
+The verified Release was launched for operator-assisted hardware validation.
 
 ### Verified output mappings and 0.6.0 dashboard
 
-The user supplied three completed 0.5.9 output sessions: C2 decoded 87 bodies
+The test operator supplied three completed 0.5.9 output sessions: C2 decoded 87 bodies
 with 29 port updates in 31.227 s; C3 decoded 87/29 in 31.647 s; C4 decoded
 90/30 in 31.584 s. All accepted credentials, disconnected and resumed scanning.
-The user confirmed wattage agreement and identified C2=856, C3=853, C4=854,
+The test operator confirmed wattage agreement and identified C2=856, C3=853, C4=854,
 complementing the earlier C1=852 mapping. Approximately -1 W with 9.1–9.2 V
 and 0.1 A was expected because the connected device was full. C3 is labelled
-65 W maximum. Field 857 is the bottom dock/pogo connection; the user has no dock.
+65 W maximum. Field 857 is the bottom dock/pogo connection; dock hardware was unavailable for testing.
 These are output comparisons; input direction remains app-convention-derived.
 
 Version 0.6.0 introduces a native five-card dashboard with a separate live-session
@@ -2132,20 +2057,19 @@ session and restores enabled passive scanning after disconnect; diagnostic-windo
 closure cannot cancel a live owner. Sleep/Bluetooth loss ends a session, and
 errors require explicit Retry rather than a reconnect loop.
 
-Pending user-assisted acceptance: stream beyond 30 seconds on the bank, unload
+Pending operator-assisted acceptance: stream beyond 30 seconds on the bank, unload
 and change ports, close/reopen the panel, test positive input direction, and
 confirm passive scanning resumes. Synthetic streams do not establish these
 hardware behaviors.
 
-0.6.0 local validation: `build/Dashboard-Final.xcresult` passed 93 tests with six
+0.6.0 local validation: the test run passed 93 tests with six
 opt-in hardware checks skipped (87 passed). Added tests cover a synthetic
 90-second live session, 15-second silence termination, credential copy cleanup,
 independent sample expiry/zero, and native normal/accessibility-size rendering.
 The empty dashboard renders were inspected; connected/error/stale battery visual
 states and real AppKit panel lifecycle remain pending live UI verification.
 Debug and Release contain arm64/x86_64; Release signature verifies and retains
-only App Sandbox and Bluetooth entitlements. Logs: `build/dashboard-tests-final.log`
-and `build/dashboard-release-final.log`. The verified Release was launched.
+only App Sandbox and Bluetooth entitlements.  The verified Release was launched.
 
 ### 0.7.0 Battery Information checkpoint
 
@@ -2158,7 +2082,7 @@ disconnect, clearing snapshots on Forget/target change/Quit. Auto/Wh/kWh and
 writes were added. Field/unit provenance is in P512 Protocol; bank availability,
 accuracy and counter reset semantics remain unverified.
 
-`build/BatteryInfo-Units.xcresult`: 97 tests executed, six opt-in hardware checks
+Validation: 97 tests executed, six opt-in hardware checks
 skipped, zero failures (91 hardware-free passed). Tests cover signed int32
 extremes/negative encoding, UInt32 limits, health isolation and recovery,
 incremental ages, explicit zero, aggregate expiry, counter decrease replacement,
@@ -2166,8 +2090,7 @@ energy/temperature conversion and filtered presence-only diagnostics. Native
 collapsed/expanded, populated/unavailable/aged detail renders and the dashboard
 normal/larger-text renders were inspected. These are synthetic render checks,
 not a live hardware/UI session. Universal Debug/Release contain arm64/x86_64;
-Release signature and App Sandbox/Bluetooth-only entitlements verify. Logs:
-`build/battery-info-tests-units.log`, `build/battery-info-release-final.log`.
+Release signature and App Sandbox/Bluetooth-only entitlements verify.
 
 Next check: connect in the dashboard, expand Battery Information and separately
 record displayed measurements and Copy Diagnostics. Compare aggregate W under
@@ -2178,8 +2101,7 @@ sessions. Unreported fields must remain unavailable. No hardware result for
 ### 0.8.0 Healthy Charging checkpoint
 
 Battery Information and Healthy Charging share the dashboard card style. The
-user confirmed the 0.7.0 battery values against the official app (100% health,
-35 cycles, 31°C, 2.730/2.124 kWh input/output). Received temperature updates
+0.7.0 battery values were confirmed against the official app. Received temperature updates
 continue at their source cadence; only connected samples under five seconds
 old are labelled Live. No polling/report-period settings were introduced.
 
@@ -2192,17 +2114,16 @@ Timeout/cancellation results require refresh/review and explicit retry; confirme
 mode with unconfirmed limits is partial. No replay/rollback/restore is automatic.
 See P512 Protocol for exact app provenance, field mapping and verification policy.
 
-`build/Healthy-VisualGate.xcresult`: 99 tests, six opt-in hardware tests skipped,
+Validation: 99 tests, six opt-in hardware tests skipped,
 zero failures (93 hardware-free passed). New coverage includes exact encrypted
 requests against independent synthetic OpenSSL vectors, authentication refusal,
 sequence/range refusal, known settings fields, pre-ack/stale readback refusal,
 matching readback, mismatches/timeouts, cancellation without retries and unique
 settings sequences. Unknown/editing card renders and Battery Information card
 renders were inspected against a panel background; actual connected/applying/
-failure interaction remains user-assisted UI validation. Debug/Release are
+failure interaction remains operator-assisted UI validation. Debug/Release are
 universal arm64/x86_64; Release signature verifies with only Bluetooth and
-App Sandbox entitlements. Logs: `build/healthy-tests-visual.log`,
-`build/healthy-release.log`.
+App Sandbox entitlements.
 
 No bank setting was changed during development. Next: compare reported healthy
 mode/limits read-only with the official app in separate BLE sessions, then use
@@ -2212,8 +2133,8 @@ cutoff behavior remains unverified.
 
 ### 0.9.0 native settings checkpoint
 
-The user confirmed Healthy Charging controls work. This is recorded as a
-user-confirmed settings result, not independent physical cutoff validation.
+The test operator confirmed Healthy Charging controls work. This is recorded as an
+operator-confirmed settings result, not independent physical cutoff validation.
 Charging now uses five-percent limit/reserve sliders in a native settings window.
 Existing intermediate values are retained until an explicit edit/Apply. A separate
 Screen pane exposes the source-backed duration, brightness, art and clock scalars.
@@ -2226,17 +2147,16 @@ resource identity and activation research. No transfer command is guessed. See
 P512 Protocol for exact code provenance and remaining blockers. No app/account
 storage, secrets or provisioning state was read or altered.
 
-`build/Screen-ArtGate.xcresult`: 102 tests executed, six opt-in hardware checks
+Validation: 102 tests executed, six opt-in hardware checks
 skipped, zero failures (96 hardware-free passed). Tests include independent
 OpenSSL screen-write vectors, source-backed field/value restrictions, screen
 readback without a Healthy Charging baseline, acknowledgement/stale/mismatch
 handling, native light/dark pane renders, RGB565/header bytes, EXIF rotation,
 square crop and alpha-to-black compositing. Unknown pane states were rendered;
 connected controls, actual window/picker ownership and device interactions remain
-user-assisted acceptance. Progress/error transfer states cannot be validated
+operator-assisted acceptance. Progress/error transfer states cannot be validated
 because artwork transport remains gated. Universal Debug/Release and signing
 checks accompany this checkpoint. Added entitlement: user-selected read-only files.
-Logs: `build/screen-tests-art.log`, `build/screen-release-art.log`.
 
 Next: read and compare the eight screen settings with the official app, then
 explicitly Apply and compare supported durations, brightness, clock enable/format
@@ -2272,20 +2192,20 @@ content rather than the settings window's unused fixed-height space.
 Artwork upload remains incomplete and disabled. Additional static evidence on
 A1/A2/A3 requests, acknowledgement payload checks and field-303 activation is
 recorded in P512 Protocol. Negotiated chunk-limit semantics, independent packet
-fixtures for the lower-level transfer and current-bank local-resource-ID
+fixtures for the lower-level transfer and current-bank resource-ID
 acceptance remain concrete research/hardware gates. No physical transfer or
 settings write was attempted during this implementation.
 
-`build/Compact-Panes.xcresult`: 104 tests executed, six opt-in hardware tests
+Validation: 104 tests executed, six opt-in hardware tests
 skipped, zero failures (98 passed). Added tests exercise direct-draft initialization,
 conflicts/Revert, pane feedback and settings-only cancellation while telemetry
 remains active, including refusal of late acknowledgements. Existing protocol,
 readback, image and unit regressions pass. Light/dark compact unknown-state panes
 were rendered at actual default sizes and inspected; populated/working-bank
-interaction, partial batch application and native sheet use remain user-assisted
+interaction, partial batch application and native sheet use remain operator-assisted
 acceptance. Upload progress/rejection/activation tests cannot establish a
 nonexistent transfer implementation. Universal build and signature checks are
-recorded with `build/compact-tests-panes.log`, `build/compact-release-final.log`.
+recorded in private validation logs.
 
 ### 0.11.0 onboarding checkpoint
 
